@@ -1,0 +1,35 @@
+services:
+  mongodb:
+    image: mongo:7
+    container_name: receipt-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  backend:
+    build:
+      context: ./backend
+    container_name: receipt-backend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - mongodb
+    environment:
+      MONGO_URI: mongodb://mongodb:27017/receipt-scanner
+      OLLAMA_URL: http://host.docker.internal:11434
+    volumes:
+      - receipt_uploads:/app/uploads
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: receipt-frontend
+    ports:
+      - "8100:80"
+    depends_on:
+      - backend
+
+volumes:
+  mongo_data:
+  receipt_uploads:

@@ -83,8 +83,9 @@ export async function processReceiptWithAI(rawText: string) {
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), Number(process.env.AI_TIMEOUT_MS || 10000));
+  const ollamaUrl = (process.env.OLLAMA_URL || 'http://localhost:11434').replace(/\/+$/, '');
 
-  const response = await fetch(process.env.OLLAMA_URL || 'http://localhost:11434/api/generate', {
+  const response = await fetch(`${ollamaUrl}/api/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     signal: controller.signal,
