@@ -136,6 +136,27 @@ function findTotal(rawText: string): number {
   return fallbackMatches.length ? asNumber(fallbackMatches[fallbackMatches.length - 1][1]) : 0;
 }
 
+function findSubtotal(rawText: string): number {
+  const subtotalMatches = [...rawText.matchAll(/(?:subtotal|sub\s*total)\s*[;:=\- ]*\s*(?:Rs\.?|INR|\u20B9|[$])?\s*([0-9,]+(?:\.\d{1,2})?)/gi)];
+  return subtotalMatches.length ? asNumber(subtotalMatches[subtotalMatches.length - 1][1]) : 0;
+}
+
+function findTax(rawText: string): number {
+  const taxLines = rawText
+    .split(/\r?\n/)
+    .filter((line) => /\b(tax|gst|cgst|sgst|igst|vat)\b/i.test(line));
+
+  for (const line of taxLines.reverse()) {
+    const amounts = [...line.matchAll(/(?:Rs\.?|INR|\u20B9|[$])?\s*([0-9,]+(?:\.\d{1,2})?)/g)]
+      .map((match) => asNumber(match[1]))
+      .filter((value) => value > 0);
+
+    if (amounts.length) return amounts[amounts.length - 1];
+  }
+
+  return 0;
+}
+
 function normalizeDiscounts(discounts: any[] = [], rawText = '') {
   const normalized = discounts
     .map((discount: any) => ({
@@ -645,10 +666,31 @@ function inferPurchaseCategory(name: string, rawText: string): string {
 
 function cleanItemName(value: string): string {
   return cleanEnglishText(value)
+    .replace(/^\d+\s+/, '')
     .replace(/^(item|desc|description|name)\s*[:#-]?\s*/i, '')
     .replace(/\b(?:qty|quantity|rate|price|mrp|rs|inr)\b\s*[:#-]?\s*$/i, '')
     .replace(/\s{2,}/g, ' ')
     .trim();
+}
+
+function isNonItemReceiptLine(line: string): boolean {
+  return (
+    /\b(total|subtotal|grand|tax|gst|cgst|sgst|igst|discount|balance|change|paid|payment|cash|card|upi|receipt|invoice|bill|date|time|expires|round|saving|amount due|visa|mastercard|charge|rec#|vcd#)\b/i.test(line) ||
+    /^[A-Z ]+\s*-\s*\d{4,}$/i.test(line) ||
+    /^[-\s\d/:.APM]+$/i.test(line)
+  );
+}
+
+function isSuspiciousPurchaseItem(item: any, receiptTotal: number): boolean {
+  const name = String(item?.name || '');
+  const totalPrice = asNumber(item?.total_price);
+
+  return (
+    !/[A-Za-z]{2,}/.test(name) ||
+    /\b(receipt|invoice|bill|store|subtotal|total|tax|visa|charge|date|expires)\b/i.test(name) ||
+    (receiptTotal > 0 && totalPrice > receiptTotal * 1.5) ||
+    totalPrice > 100000
+  );
 }
 
 function extractPurchaseItems(rawText: string) {
@@ -661,10 +703,7 @@ function extractPurchaseItems(rawText: string) {
   for (const rawLine of lines) {
     const line = rawLine.replace(/\s+/g, ' ').trim();
 
-    if (
-      !line ||
-      /\b(total|subtotal|grand|tax|gst|cgst|sgst|igst|discount|balance|change|paid|payment|cash|card|upi|receipt|invoice|bill|date|time|phone|mobile|round|saving|amount due)\b/i.test(line)
-    ) {
+    if (!line || isNonItemReceiptLine(line)) {
       continue;
     }
 
@@ -683,8 +722,29 @@ function extractPurchaseItems(rawText: string) {
       continue;
     }
 
-    const amountAtEndMatch = line.match(/^(.+?)\s+(?:Rs\.?|INR|\u20B9)?\s*([0-9,]+(?:\.[0-9]{1,2})?)$/i);
+    const leadingQtyAmountMatch = line.match(/^([0-9]+(?:\.[0-9]+)?)\s+(.+?)\s+(?:Rs\.?|INR|\u20B9|[$])?\s*([0-9,]+(?:\.[0-9]{1,2})?)$/i);
+    if (leadingQtyAmountMatch) {
+      const quantity = asNumber(leadingQtyAmountMatch[1]) || 1;
+      const name = cleanItemName(leadingQtyAmountMatch[2]);
+      const totalPrice = asNumber(leadingQtyAmountMatch[3]);
+
+      if (name.length >= 2 && totalPrice > 0) {
+        items.push({
+          name,
+          quantity,
+          unit_price: quantity ? totalPrice / quantity : totalPrice,
+          total_price: totalPrice,
+          category: inferPurchaseCategory(name, rawText),
+        });
+      }
+      continue;
+    }
+
+    const hasCurrencyAmount = /(?:Rs\.?|INR|\u20B9|[$])\s*[0-9,]+(?:\.[0-9]{1,2})?\s*$/i.test(line);
+    const hasDecimalAmount = /[0-9,]+\.[0-9]{1,2}\s*$/.test(line);
+    const amountAtEndMatch = line.match(/^(.+?)\s+(?:Rs\.?|INR|\u20B9|[$])?\s*([0-9,]+(?:\.[0-9]{1,2})?)$/i);
     if (!amountAtEndMatch) continue;
+    if (!hasCurrencyAmount && !hasDecimalAmount) continue;
 
     let namePart = amountAtEndMatch[1];
     const totalPrice = asNumber(amountAtEndMatch[2]);
@@ -726,6 +786,7 @@ function normalizePurchase(data: any, rawText: string) {
   transaction.receipt_number ??= '';
 
   if (!transaction.receipt_number) transaction.receipt_number = findReceiptNumber(rawText);
+  const rawTotal = findTotal(rawText);
 
   const aiItems = (data.items || []).map((item: any) => {
     const quantity = asNumber(item.quantity) || 1;
@@ -740,14 +801,15 @@ function normalizePurchase(data: any, rawText: string) {
     };
   }).filter((item: any) => item.name || item.total_price > 0);
   const fallbackItems = extractPurchaseItems(rawText);
-  const items = aiItems.length ? aiItems : fallbackItems;
+  const aiItemsLookBad = aiItems.length === 0 || aiItems.some((item: any) => isSuspiciousPurchaseItem(item, rawTotal));
+  const items = aiItemsLookBad && fallbackItems.length ? fallbackItems : aiItems;
 
   const totals = data.totals || {};
   const itemsSubtotal = items.reduce((sum: number, item: any) => sum + asNumber(item.total_price), 0);
-  totals.subtotal = asNumber(totals.subtotal) || itemsSubtotal;
-  totals.tax = asNumber(totals.tax);
+  totals.subtotal = findSubtotal(rawText) || asNumber(totals.subtotal) || itemsSubtotal;
+  totals.tax = findTax(rawText) || asNumber(totals.tax);
   totals.discounts = normalizeDiscounts(totals.discounts || data.discounts || [], rawText);
-  totals.total = findTotal(rawText) || asNumber(totals.total) || Math.max(0, itemsSubtotal + totals.tax - sumDiscounts(totals.discounts));
+  totals.total = rawTotal || asNumber(totals.total) || Math.max(0, itemsSubtotal + totals.tax - sumDiscounts(totals.discounts));
 
   return {
     document: { type: 'receipt', transaction_type: 'purchase', transport_type: '' },
