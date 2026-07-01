@@ -581,25 +581,13 @@ function isRouteSeparator(line: string): boolean {
 }
 
 function findFirstEnglishPlaceFromTo(lines: string[], startIndex: number, direction: -1 | 1): string {
-  let scanned = 0;
-  let bestLine = '';
-  let bestScore = 0;
-
-  for (let index = startIndex; index >= 0 && index < lines.length && scanned < 10; index += direction, scanned++) {
+  for (let index = startIndex, scanned = 0; index >= 0 && index < lines.length && scanned < 10; index += direction, scanned++) {
     if (isEnglishRouteCandidate(lines[index])) {
-      const score = bmtcPlaceConfidence(lines[index]);
-      if (score > bestScore) {
-        bestLine = lines[index];
-        bestScore = score;
-      }
-
-      if (direction === -1 || score >= 7) {
-        return canonicalizeBmtcPlace(lines[index]);
-      }
+      return canonicalizeBmtcPlace(lines[index]);
     }
   }
 
-  return bestLine ? canonicalizeBmtcPlace(bestLine) : '';
+  return '';
 }
 
 function extractRouteAroundTo(rawLines: string[]): { pickup: string; destination: string } {

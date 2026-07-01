@@ -208,6 +208,26 @@ describe('AppController', () => {
       expect(result.payment.method).toBe('UPI');
       expect(result.payment.amount).toBe(35);
     });
+
+    it('uses the nearest English text above and below TO for BMTC route fields', () => {
+      const rawText = [
+        'BMTC',
+        'Depot-51',
+        'Kundalahalli Gate',
+        'TO',
+        'White Field TTMC',
+        'Depot-25 Gate (Towards Hebbala)',
+        'Total: Rs.18.00 (UPI)',
+      ].join('\n');
+
+      const result = enrichReceiptData({}, rawText);
+
+      expect(result.document.type).toBe('ticket');
+      expect(result.document.transport_type).toBe('bus');
+      expect(result.travel.pickup_point).toBe('Kundalahalli Gate');
+      expect(result.travel.destination).toBe('Whitefield');
+      expect(result.travel.destination).not.toBe('Depot-25 Gate (Towards Hebbala)');
+    });
   });
 
   describe('product table parsing', () => {
