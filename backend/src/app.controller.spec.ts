@@ -47,7 +47,40 @@ describe('AppController', () => {
       const result = (appController as any).validateReceiptLikeText(nonBillText, 100);
 
       expect(result.ok).toBe(false);
-      expect(result.message).toMatch(/valid bill or ticket/i);
+      expect(result.message).toMatch(/bill or ticket/i);
+    });
+
+    it('rejects assignment/spec PDF text even when it contains sample receipt JSON', () => {
+      const assignmentText = [
+        'Project Assignment: Web-Based AI Receipt Scanner',
+        'Core Functional Requirements',
+        'Output Sample:',
+        '"vendor": { "name": "Whole Foods Market" }',
+        '"transaction": { "date": "2025-05-15", "receipt_number": "ABC123456" }',
+        '"items": [{ "name": "Organic Bananas", "quantity": 2, "unit_price": 1.99, "total_price": 3.98 }]',
+        '"totals": { "subtotal": 45.50, "tax": 3.64, "total": 44.14 }',
+        '"payment": { "method": "Visa ****1234", "amount": 44.14 }',
+        'Evaluation Criteria',
+      ].join('\n');
+
+      const result = (appController as any).validateReceiptLikeText(assignmentText, 100);
+
+      expect(result.ok).toBe(false);
+      expect(result.message).toMatch(/bill or ticket/i);
+    });
+
+    it('accepts BMTC/depot OCR text as a ticket even when OCR misses some details', () => {
+      const bmtcText = [
+        'BMTC',
+        'Depot-28',
+        'Central Silk Board',
+        'TO',
+        'Kadubeesanahalli',
+      ].join('\n');
+
+      const result = (appController as any).validateReceiptLikeText(bmtcText, 18);
+
+      expect(result.ok).toBe(true);
     });
 
     it('accepts a real receipt-like text with totals and payment signals', () => {

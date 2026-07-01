@@ -692,7 +692,7 @@ export class AppController {
   private ocrCompletenessScore(text: string): number {
     let score = 0;
     if (/\bto\b/i.test(text)) score += 1;
-    if (/\b(depot\s*[- ]?\d+|gate|temple|field|hospital|towards)\b/i.test(text)) score += 1;
+    if (/\b(depot\s*[- ]?\d+|dep[o0a]t\s*[- ]?\d+|dept\s*[- ]?\d+|gate|temple|field|hospital|towards)\b/i.test(text)) score += 1;
     if (/(?:Rs\.?|INR|\u20B9)\s*\d+(?:\.\d{1,2})?/i.test(text)) score += 1;
     if (/\b(cash|upi)\b/i.test(text)) score += 1;
     return score;
@@ -747,8 +747,7 @@ export class AppController {
   }
 
   private hasBmtcOcrSignals(text: string): boolean {
-    return /\b(bmtc|bmrtc|depot\s*[- ]?\d+|dep[o0a]t\s*[- ]?\d+|dept\s*[- ]?\d+|ordinary|tkn|ticket|fare|cash|upi)\b/i.test(text)
-      && /\bto\b/i.test(text);
+    return /\b(bmtc|bmrtc|depot\s*[- ]?\d*|dep[o0a]t\s*[- ]?\d*|dept\s*[- ]?\d*|ordinary|tkn|ticket|fare|cash|upi)\b/i.test(text);
   }
 
   private stripNonEnglishOnlyLines(text: string): string {
@@ -944,6 +943,8 @@ export class AppController {
     const text = rawText.replace(/\s+/g, ' ').trim();
     const words = text.match(/[A-Za-z]{3,}|[\u0C80-\u0CFF]{2,}|[\u0D00-\u0D7F]{2,}|[\u0900-\u097F]{2,}/g) || [];
     const amountMatches = text.match(/(?:Rs\.?|INR|\u20B9|[$])?\s*[0-9]+(?:[,.][0-9]{1,2})?/gi) || [];
+    const hasBmtcDepotSignal = /\b(?:bmtc|bmrtc|depot|dep[o0a]t|dept)\s*[-:]?\s*\d*\b/i.test(text);
+    const hasNonBillDocumentSignal = /\b(curriculum\s+vitae|resume|professional\s+summary|work\s+experience|education|technical\s+skills|certifications?|portfolio|cover\s+letter|project\s+assignment|core\s+functional\s+requirements|project\s+deliverables|evaluation\s+criteria|milestones?|suggested\s+technology\s+stack|resources\s+to\s+get\s+started)\b/i.test(text);
     const billSignals = text.match(/\b(receipt|invoice|bill|total|subtotal|tax|gst|cgst|sgst|igst|amount|paid|balance|discount|qty|quantity|item|price|mrp|cash|card|upi|visa|refund|return|fare|ticket|pnr|depot|dept|departure|arrival|boarding|train|railway|irctc|pizza|food|restaurant|health|medical|pharmacy|paracetamol|antibiotic|petrol|diesel|fuel|pump|density|litre|liter|ltr)\b|\u20B9|Rs\.?/gi) || [];
     const identitySignals = text.match(/\b(receipt|invoice|bill|ticket|pnr|voucher|slip|gst|upi|cash|card|depot|dept|train|irctc|petrol|diesel|pharmacy|restaurant|bmtc|bmrtc)\b/gi) || [];
     const paymentSignals = text.match(/\b(cash|card|upi|visa|mastercard|paid|payment|charge|refund)\b/gi) || [];
@@ -967,6 +968,17 @@ export class AppController {
     const hasFuelStructure =
       /\b(?:petrol|diesel|fuel|pump|density|litre|liter|ltr)\b/i.test(text)
       && (hasCurrencySymbol || amountMatches.length >= 2);
+
+    if (hasBmtcDepotSignal) {
+      return { ok: true, message: '' };
+    }
+
+    if (hasNonBillDocumentSignal) {
+      return {
+        ok: false,
+        message: 'This does not look like a bill or ticket. Please upload a receipt, travel ticket, refund bill, or fuel bill.',
+      };
+    }
 
     if (confidence < 25 && words.length < 8) {
       return {
