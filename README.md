@@ -252,6 +252,13 @@ The following test cases should be used for project evaluation and regression te
 | TC-23 | 50-user upload scalability | Run k6 upload test with sample receipt | At least 95% uploads accepted, p95 upload response under 5 seconds, containers stay running. |
 | TC-24 | Mobile camera upload | Open app on mobile-width viewport/device | Camera upload option appears only on mobile and opens rear camera/camera picker. |
 
+## Classification Rules
+
+- If OCR contains `depot`, `depat`, `dept`, or a depot number, classify it as a BMTC bus ticket.
+- For BMTC bus tickets, pickup and destination come from the center layout around the standalone word `TO`: nearest readable English place above `TO` is pickup, nearest readable English place below `TO` is destination, and Kannada/noisy lines are skipped.
+- For BMTC bus tickets, total and payment amount come only from the two-digit rupee amount next to `(CASH)` or `(UPI)`.
+- If OCR contains `store`, classify it as a grocery/purchase receipt unless a stronger BMTC, fuel, or refund signal is present.
+
 ## Duplicate Rule
 
 A receipt/ticket is considered duplicate when the identifying values match after normalization:

@@ -98,6 +98,19 @@ describe('AppController', () => {
 
       expect(result.ok).toBe(true);
     });
+
+    it('accepts store OCR text as a grocery receipt signal', () => {
+      const receiptText = [
+        'RED STORE',
+        '1 MILK $20.00',
+        'TOTAL $20.00',
+        'CASH $20.00',
+      ].join('\n');
+
+      const result = (appController as any).validateReceiptLikeText(receiptText, 24);
+
+      expect(result.ok).toBe(true);
+    });
   });
 
   describe('BMTC route parsing', () => {

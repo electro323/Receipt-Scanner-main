@@ -945,8 +945,8 @@ export class AppController {
     const amountMatches = text.match(/(?:Rs\.?|INR|\u20B9|[$])?\s*[0-9]+(?:[,.][0-9]{1,2})?/gi) || [];
     const hasBmtcDepotSignal = /\b(?:bmtc|bmrtc|depot|dep[o0a]t|dept)\s*[-:]?\s*\d*\b/i.test(text);
     const hasNonBillDocumentSignal = /\b(curriculum\s+vitae|resume|professional\s+summary|work\s+experience|education|technical\s+skills|certifications?|portfolio|cover\s+letter|project\s+assignment|core\s+functional\s+requirements|project\s+deliverables|evaluation\s+criteria|milestones?|suggested\s+technology\s+stack|resources\s+to\s+get\s+started)\b/i.test(text);
-    const billSignals = text.match(/\b(receipt|invoice|bill|total|subtotal|tax|gst|cgst|sgst|igst|amount|paid|balance|discount|qty|quantity|item|price|mrp|cash|card|upi|visa|refund|return|fare|ticket|pnr|depot|dept|departure|arrival|boarding|train|railway|irctc|pizza|food|restaurant|health|medical|pharmacy|paracetamol|antibiotic|petrol|diesel|fuel|pump|density|litre|liter|ltr)\b|\u20B9|Rs\.?/gi) || [];
-    const identitySignals = text.match(/\b(receipt|invoice|bill|ticket|pnr|voucher|slip|gst|upi|cash|card|depot|dept|train|irctc|petrol|diesel|pharmacy|restaurant|bmtc|bmrtc)\b/gi) || [];
+    const billSignals = text.match(/\b(receipt|invoice|bill|store|total|subtotal|tax|gst|cgst|sgst|igst|amount|paid|balance|discount|qty|quantity|item|price|mrp|cash|card|upi|visa|refund|return|fare|ticket|pnr|depot|dept|departure|arrival|boarding|train|railway|irctc|pizza|food|restaurant|health|medical|pharmacy|paracetamol|antibiotic|petrol|diesel|fuel|pump|density|litre|liter|ltr)\b|\u20B9|Rs\.?/gi) || [];
+    const identitySignals = text.match(/\b(receipt|invoice|bill|store|ticket|pnr|voucher|slip|gst|upi|cash|card|depot|dept|train|irctc|petrol|diesel|pharmacy|restaurant|bmtc|bmrtc)\b/gi) || [];
     const paymentSignals = text.match(/\b(cash|card|upi|visa|mastercard|paid|payment|charge|refund)\b/gi) || [];
     const lineItemSignals = text.match(/\b(total|subtotal|tax|gst|qty|quantity|item|price|mrp|fare|rate|litre|liter|ltr)\b/gi) || [];
     const hasCurrencySymbol = /(?:Rs\.?|INR|\u20B9|[$])\s*\d/i.test(text);
@@ -968,6 +968,10 @@ export class AppController {
     const hasFuelStructure =
       /\b(?:petrol|diesel|fuel|pump|density|litre|liter|ltr)\b/i.test(text)
       && (hasCurrencySymbol || amountMatches.length >= 2);
+    const hasStoreReceiptStructure =
+      /\bstore\b/i.test(text)
+      && (hasCurrencySymbol || amountMatches.length >= 2)
+      && /\b(?:total|subtotal|cash|card|upi|visa|charge|paid|item|price|qty|quantity)\b/i.test(text);
 
     if (hasBmtcDepotSignal) {
       return { ok: true, message: '' };
@@ -978,6 +982,10 @@ export class AppController {
         ok: false,
         message: 'This does not look like a bill or ticket. Please upload a receipt, travel ticket, refund bill, or fuel bill.',
       };
+    }
+
+    if (hasStoreReceiptStructure) {
+      return { ok: true, message: '' };
     }
 
     if (confidence < 25 && words.length < 8) {
@@ -996,7 +1004,7 @@ export class AppController {
 
     if (
       billSignals.length < 3
-      || (!hasReceiptLikeStructure && !hasStrongTicketStructure && !hasFuelStructure)
+      || (!hasReceiptLikeStructure && !hasStrongTicketStructure && !hasFuelStructure && !hasStoreReceiptStructure)
     ) {
       return {
         ok: false,
