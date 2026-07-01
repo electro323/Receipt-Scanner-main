@@ -280,6 +280,39 @@ describe('AppController', () => {
       expect(result.totals.total).toBe(18);
       expect(result.payment.amount).toBe(18);
     });
+
+    it('does not use depot-only or noisy OCR lines as BMTC route places', () => {
+      const rawText = [
+        'BMTC',
+        'Depot-29',
+        'T No: 180',
+        '14-04-2024 19:32:57',
+        'Ragigudda Temple',
+        'TO',
+        'J vadoes ded 8 2',
+        'Depot-25 Gate (Towards Hebbala)',
+        'Ad: 1x Rs.15.00 = Rs.15.00',
+        'Total: Rs.15.00 (CASH)',
+        'Ordinary KA41D2747 Tkn No: 6384',
+      ].join('\n');
+
+      const result = enrichReceiptData({
+        document: { type: 'ticket', transaction_type: 'purchase', transport_type: 'bus' },
+        travel: {
+          pickup_point: 'Depot-29',
+          destination: 'J vadoes ded 8 2',
+          route: 'Depot-29 to J vadoes ded 8 2',
+          ticket_number: '8384',
+        },
+      }, rawText);
+
+      expect(result.travel.pickup_point).toBe('Ragigudda Temple');
+      expect(result.travel.destination).toBe('Depot-25 Gate (Towards Hebbala)');
+      expect(result.travel.route).toBe('Ragigudda Temple to Depot-25 Gate (Towards Hebbala)');
+      expect(result.travel.ticket_number).toBe('6384');
+      expect(result.totals.total).toBe(15);
+      expect(result.payment.method).toBe('Cash');
+    });
   });
 
   describe('product table parsing', () => {

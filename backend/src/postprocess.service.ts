@@ -481,6 +481,10 @@ function isRouteNoiseLine(value: string): boolean {
   );
 }
 
+function isDepotOnlyLine(value: string): boolean {
+  return /^\s*(?:depot|dep[o0a]t|dept)\s*[-:]?\s*\d+\s*$/i.test(cleanPlaceName(value));
+}
+
 function cleanPlaceName(value: string): string {
   return value
     .replace(/[^A-Za-z0-9 .,&()/-]/g, ' ')
@@ -537,7 +541,8 @@ function isUsefulPlaceLine(line: string): boolean {
   return /[A-Za-z]{3,}/.test(cleaned)
     && hasPlaceShape
     && !isRouteNoiseLine(cleaned)
-    && bmtcPlaceConfidence(cleaned) >= 2
+    && !isDepotOnlyLine(cleaned)
+    && bmtcPlaceConfidence(cleaned) >= 5
     && !/(total|amount|fare|rs\.?|upi|ordinary|ticket|no:|ad:|bmtc|ksrtc|phone|date|time|boarding at|booked from|departure|arrival|pnr|class|train)/i.test(cleaned);
 }
 
@@ -546,6 +551,7 @@ function isRoutePlaceLine(line: string): boolean {
 
   return /[A-Za-z]{3,}/.test(cleaned)
     && !isRouteNoiseLine(cleaned)
+    && !isDepotOnlyLine(cleaned)
     && !/(total|amount|fare|rs\.?|\u20B9|upi|ordinary|ticket|no:|ad:|bmtc|ksrtc|phone|date|time|boarding at|booked from|departure|arrival|pnr|class|train|payment|passenger|quota|distance|kannada|english text|text line)/i.test(cleaned);
 }
 
@@ -583,7 +589,7 @@ function isEnglishRouteCandidate(line: string): boolean {
   if (!isRoutePlaceLine(cleaned)) return false;
   if (/^\d|^\W*$/.test(cleaned)) return false;
 
-  return bmtcPlaceConfidence(cleaned) >= 2;
+  return bmtcPlaceConfidence(cleaned) >= 5;
 }
 
 function isRouteSeparator(line: string): boolean {
