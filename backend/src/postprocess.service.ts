@@ -469,6 +469,18 @@ function canonicalizeBmtcPlace(value: string): string {
   return best || cleaned;
 }
 
+function isRouteNoiseLine(value: string): boolean {
+  const cleaned = cleanPlaceName(value);
+
+  return (
+    /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)\b/i.test(cleaned) ||
+    /\b(?:research\.?digital|digital|photo|image|screenshot)\b/i.test(cleaned) ||
+    /\b20\d{2}\b/.test(cleaned) ||
+    /\b\d{1,2}[:.]\d{2}\b/.test(cleaned) ||
+    /^[,.\s-]*[A-Za-z]{1,3}[,.\s-]*$/.test(cleaned)
+  );
+}
+
 function cleanPlaceName(value: string): string {
   return value
     .replace(/[^A-Za-z0-9 .,&()/-]/g, ' ')
@@ -524,6 +536,8 @@ function isUsefulPlaceLine(line: string): boolean {
 
   return /[A-Za-z]{3,}/.test(cleaned)
     && hasPlaceShape
+    && !isRouteNoiseLine(cleaned)
+    && bmtcPlaceConfidence(cleaned) >= 2
     && !/(total|amount|fare|rs\.?|upi|ordinary|ticket|no:|ad:|bmtc|ksrtc|phone|date|time|boarding at|booked from|departure|arrival|pnr|class|train)/i.test(cleaned);
 }
 
@@ -531,6 +545,7 @@ function isRoutePlaceLine(line: string): boolean {
   const cleaned = cleanPlaceName(line);
 
   return /[A-Za-z]{3,}/.test(cleaned)
+    && !isRouteNoiseLine(cleaned)
     && !/(total|amount|fare|rs\.?|\u20B9|upi|ordinary|ticket|no:|ad:|bmtc|ksrtc|phone|date|time|boarding at|booked from|departure|arrival|pnr|class|train|payment|passenger|quota|distance|kannada|english text|text line)/i.test(cleaned);
 }
 
@@ -878,6 +893,17 @@ function inferTicketTravel(rawText: string, travel: any) {
   }
 
   return travel;
+}
+
+function findBusTicketNumber(rawText: string): string {
+  const preferred = rawText.match(/\b(?:tkn|token|ticket)\s*no\.?\s*[:#-]?\s*([A-Z0-9][A-Z0-9\/-]{2,})/i);
+  if (preferred) return preferred[1];
+
+  const ordinaryLine = rawText.match(/\bordinary\b[^\n]*\bno\.?\s*[:#-]?\s*([A-Z0-9][A-Z0-9\/-]{2,})/i);
+  if (ordinaryLine) return ordinaryLine[1];
+
+  const generic = rawText.match(/\b(?:pnr|booking|trip|journey|number)\b\s*[:#-]?\s*([A-Z0-9][A-Z0-9\/-]{2,})|#\s*([A-Z0-9][A-Z0-9\/-]{2,})/i);
+  return generic ? (generic[1] || generic[2]) : '';
 }
 
 function inferPurchaseVendorName(rawText: string): string {
@@ -1279,12 +1305,16 @@ function normalizeTicket(data: any, rawText: string) {
   } else {
     travel.route = String(travel.route || '').trim();
     travel.ticket_number = String(travel.ticket_number || travel.ticketNumber || travel.pnr || '').trim();
+    if (isBmtcTicket(rawText)) {
+      if (!isEnglishRouteCandidate(travel.pickup_point)) travel.pickup_point = '';
+      if (!isEnglishRouteCandidate(travel.destination)) travel.destination = '';
+      travel.route = '';
+    }
     inferTicketTravel(rawText, travel);
     travel.pickup_point = canonicalizeBmtcPlace(travel.pickup_point || '');
     travel.destination = canonicalizeBmtcPlace(travel.destination || '');
 
-    const ticketMatch = rawText.match(/\b(?:ticket|pnr|booking|trip|journey|no|number)\b\s*[:#-]?\s*([A-Z0-9][A-Z0-9\/-]{2,})|#\s*([A-Z0-9][A-Z0-9\/-]{2,})/i);
-    if (!travel.ticket_number && ticketMatch) travel.ticket_number = ticketMatch[1] || ticketMatch[2];
+    travel.ticket_number = findBusTicketNumber(rawText) || travel.ticket_number;
     if (travel.pickup_point && travel.destination) {
       travel.route = travel.pickup_point + ' to ' + travel.destination;
     }

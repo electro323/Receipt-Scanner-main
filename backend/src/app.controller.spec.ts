@@ -247,6 +247,39 @@ describe('AppController', () => {
       expect(result.travel.pickup_point).toBe('Kundalahalli Gate');
       expect(result.travel.destination).toBe('Whitefield');
     });
+
+    it('replaces noisy AI BMTC route fields with the route around TO', () => {
+      const rawText = [
+        'BMTC',
+        'T No: 341',
+        'Depot-51',
+        '18-05-2026 13:59:30',
+        'Kundalahalli Gate',
+        'TO',
+        'White Field TTMC (Vydehi Hospital)',
+        'Fare + GST',
+        'Total: Rs.18.00 (UPI)',
+        'Ordinary KA57F6579 Tkn No: 16131',
+        'research.digital Jun 2, 2026, 09:50',
+      ].join('\n');
+
+      const result = enrichReceiptData({
+        document: { type: 'ticket', transaction_type: 'purchase', transport_type: 'bus' },
+        travel: {
+          pickup_point: ', Yoo',
+          destination: 'A Jun 2, 2026, 09 50 h',
+          route: ', Yoo to A Jun 2, 2026, 09 50 h',
+          ticket_number: '341',
+        },
+      }, rawText);
+
+      expect(result.travel.pickup_point).toBe('Kundalahalli Gate');
+      expect(result.travel.destination).toBe('Whitefield (Vydehi Hospital)');
+      expect(result.travel.route).toBe('Kundalahalli Gate to Whitefield (Vydehi Hospital)');
+      expect(result.travel.ticket_number).toBe('16131');
+      expect(result.totals.total).toBe(18);
+      expect(result.payment.amount).toBe(18);
+    });
   });
 
   describe('product table parsing', () => {
