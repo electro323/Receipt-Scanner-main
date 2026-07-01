@@ -228,6 +228,25 @@ describe('AppController', () => {
       expect(result.travel.destination).toBe('Whitefield');
       expect(result.travel.destination).not.toBe('Depot-25 Gate (Towards Hebbala)');
     });
+
+    it('prefers the standalone TO closest to the ticket center', () => {
+      const rawText = [
+        'BMTC',
+        'Old Market',
+        'TO',
+        'Wrong Stop',
+        'Depot-51',
+        'Kundalahalli Gate',
+        'TO',
+        'White Field TTMC',
+        'Total: Rs.18.00 (UPI)',
+      ].join('\n');
+
+      const result = enrichReceiptData({}, rawText);
+
+      expect(result.travel.pickup_point).toBe('Kundalahalli Gate');
+      expect(result.travel.destination).toBe('Whitefield');
+    });
   });
 
   describe('product table parsing', () => {

@@ -591,10 +591,15 @@ function findFirstEnglishPlaceFromTo(lines: string[], startIndex: number, direct
 }
 
 function extractRouteAroundTo(rawLines: string[]): { pickup: string; destination: string } {
+  const centerIndex = (rawLines.length - 1) / 2;
   const toIndexes = rawLines
     .map((line, index) => ({ line, index }))
     .filter(({ line }) => isRouteSeparator(line))
-    .map(({ index }) => index);
+    .map(({ index }) => index)
+    .sort((left, right) => {
+      const distance = Math.abs(left - centerIndex) - Math.abs(right - centerIndex);
+      return distance || right - left;
+    });
 
   for (const toIndex of toIndexes) {
     const pickup = findFirstEnglishPlaceFromTo(rawLines, toIndex - 1, -1);

@@ -37,7 +37,7 @@ Keep these Tesseract traineddata files available in either the backend root or b
 ## Classification Rules
 
 - If OCR contains `depot`, `depat`, `dept`, or a depot number, the backend treats it as a BMTC bus ticket.
-- BMTC pickup and destination are extracted from the center layout around standalone `TO`: nearest readable English place above `TO` is pickup, nearest readable English place below `TO` is destination, skipping Kannada/noisy lines.
+- BMTC pickup and destination are extracted by first focusing on the standalone `TO` closest to the center of the ticket/image. The nearest readable English place above that `TO` is pickup, and the nearest readable English place below that `TO` is destination, skipping Kannada/noisy lines.
 - BMTC total/payment amount is taken only from the two-digit rupee amount beside `(CASH)` or `(UPI)`.
 - If OCR contains `store`, the backend treats it as a grocery/purchase receipt unless there is a stronger BMTC, fuel, or refund signal.
 

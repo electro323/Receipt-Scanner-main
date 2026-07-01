@@ -255,7 +255,7 @@ The following test cases should be used for project evaluation and regression te
 ## Classification Rules
 
 - If OCR contains `depot`, `depat`, `dept`, or a depot number, classify it as a BMTC bus ticket.
-- For BMTC bus tickets, pickup and destination come from the center layout around the standalone word `TO`: nearest readable English place above `TO` is pickup, nearest readable English place below `TO` is destination, and Kannada/noisy lines are skipped.
+- For BMTC bus tickets, first focus on the standalone `TO` closest to the center of the ticket/image. Pickup and destination come from that center layout: nearest readable English place above `TO` is pickup, nearest readable English place below `TO` is destination, and Kannada/noisy lines are skipped.
 - For BMTC bus tickets, total and payment amount come only from the two-digit rupee amount next to `(CASH)` or `(UPI)`.
 - If OCR contains `store`, classify it as a grocery/purchase receipt unless a stronger BMTC, fuel, or refund signal is present.
 
