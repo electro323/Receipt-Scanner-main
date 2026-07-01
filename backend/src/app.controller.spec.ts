@@ -33,6 +33,40 @@ describe('AppController', () => {
     });
   });
 
+  describe('bill content validation', () => {
+    it('rejects a non-bill PDF-like document even when it has generic numbers', () => {
+      const nonBillText = [
+        'Project Assignment Web Based AI Receipt Scanner',
+        'Objective',
+        'Build a full stack web application that allows users to upload files.',
+        'Section 1 Introduction',
+        'The total number of requirements is 12 and the amount of effort varies.',
+        'This document contains instructions and evaluation details.',
+      ].join('\n');
+
+      const result = (appController as any).validateReceiptLikeText(nonBillText, 100);
+
+      expect(result.ok).toBe(false);
+      expect(result.message).toMatch(/valid bill or ticket/i);
+    });
+
+    it('accepts a real receipt-like text with totals and payment signals', () => {
+      const receiptText = [
+        'REDSTORE',
+        'Receipt No 989789',
+        '1 XIOMI NOTE 5 $50.99',
+        'SUBTOTAL $50.99',
+        'TAX $5.00',
+        'TOTAL $55.99',
+        'VISA CHARGE $55.99',
+      ].join('\n');
+
+      const result = (appController as any).validateReceiptLikeText(receiptText, 100);
+
+      expect(result.ok).toBe(true);
+    });
+  });
+
   describe('BMTC route parsing', () => {
     it('uses the English place above and below TO while skipping Kannada lines', () => {
       const rawText = [
