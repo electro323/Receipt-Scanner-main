@@ -255,6 +255,29 @@ ion-label {
 .custom-upload-btn:hover {
   background: #2563eb;
 }
+
+.upload-action-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.camera-upload-btn {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  background: #0f766e;
+  box-shadow: 0 10px 20px rgba(15, 118, 110, 0.18);
+}
+
+.camera-upload-btn:hover {
+  background: #115e59;
+}
+
+.camera-upload-btn ion-icon {
+  font-size: 18px;
+}
 .upload-preview {
   margin-top: 20px;
   border-radius: 16px;
@@ -898,6 +921,70 @@ ion-input {
   white-space: nowrap;
 }
 
+.analytics-card {
+  overflow: hidden;
+}
+
+.analytics-total {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.analytics-total strong {
+  color: var(--text-main);
+  font-size: 24px;
+}
+
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.analytics-row {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+}
+
+.analytics-row-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text-main);
+}
+
+.analytics-row-top span {
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.analytics-bar-track {
+  height: 8px;
+  margin-top: 12px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.analytics-bar {
+  height: 100%;
+  border-radius: 999px;
+  background: #14b8a6;
+}
+
+.analytics-meta {
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .recent-title::before {
   content: "";
   display: inline-block;
@@ -991,5 +1078,23 @@ ion-input {
   .recent-upload-table th,
   .recent-upload-table td {
     padding: 12px 14px;
+  }
+
+  .upload-action-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .upload-action-row .custom-upload-btn {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 46px;
+    padding: 12px 14px;
+    text-align: center;
+  }
+
+  .camera-upload-btn {
+    display: inline-flex;
   }
 }

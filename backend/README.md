@@ -1,6 +1,6 @@
 # Receipt Scanner Backend
 
-NestJS API for receipt upload, OCR, Llama 3.1 structuring, MongoDB persistence, duplicate detection, and JSON/CSV export.
+NestJS API for receipt upload, Tesseract OCR, Llama 3.1 structuring, MongoDB persistence, duplicate detection, rate limiting, analytics, and JSON/CSV export.
 
 ## Setup
 
@@ -21,7 +21,7 @@ FRONTEND_ORIGIN=http://localhost:8100
 
 ## OCR Languages
 
-The backend is configured for English, Kannada, Malayalam, and Hindi using:
+The backend uses Tesseract with preprocessing variants for contrast, sharpening, thresholding, BMTC pink-mark cleanup, and OpenCV-based receipt cleanup. Tesseract is configured for English, Kannada, Malayalam, and Hindi using:
 
 ```text
 eng+kan+mal+hin
@@ -41,6 +41,12 @@ Keep these Tesseract traineddata files available in either the backend root or b
 - PUT /receipt/:transactionId or /receipts/:transactionId
 - GET /receipt/:transactionId/export/json
 - GET /receipt/:transactionId/export/csv
+- GET /receipt/:transactionId/export/excel
+- GET /receipt/:transactionId/export/pdf
+- GET /analytics/monthly
+- POST /metrics/accuracy
+
+Uploads use the `X-User-Id` header for per-user guardrails. Each user can upload 20 receipts per hour and 100 receipts per day. The monthly analytics endpoint uses the same user ID and summarizes completed receipt totals by category.
 
 ## Duplicate Rule
 

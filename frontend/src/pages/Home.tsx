@@ -6,11 +6,14 @@ import {
   IonToolbar,
   IonButton,
   IonAlert,
-  IonSpinner
+  IonSpinner,
+  IonIcon
 } from '@ionic/react';
+import { cameraOutline } from 'ionicons/icons';
 import { useEffect, useState } from 'react';
 import { useHistory } from 'react-router-dom';
 import './Home.css';
+import { getUserHeaders } from '../userIdentity';
 
 type ScanStatus = 'processing' | 'completed' | 'failed' | 'waiting' | 'duplicate_pending';
 
@@ -339,12 +342,13 @@ const Home: React.FC = () => {
     try {
       const response = await fetch('http://localhost:3000/upload', {
         method: 'POST',
+        headers: getUserHeaders(),
         body: formData,
       });
 
       const data = await response.json();
 
-      if (data.success === false) {
+      if (!response.ok || data.success === false) {
         setAlertMessage(
           data.message || 'Receipt could not be read. Please upload a clearer image.',
         );
@@ -449,9 +453,25 @@ const Home: React.FC = () => {
               hidden
             />
 
-            <label htmlFor="receipt-upload" className="custom-upload-btn">
-              Choose Receipt
-            </label>
+            <input
+              id="receipt-camera-upload"
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleFileChange}
+              hidden
+            />
+
+            <div className="upload-action-row">
+              <label htmlFor="receipt-upload" className="custom-upload-btn">
+                Choose Receipt
+              </label>
+
+              <label htmlFor="receipt-camera-upload" className="custom-upload-btn camera-upload-btn">
+                <IonIcon icon={cameraOutline} aria-hidden="true" />
+                Camera
+              </label>
+            </div>
 
             <p className="selected-file-text">
               {selectedFile ? 'Selected file: ' + selectedFile.name : 'No file selected'}

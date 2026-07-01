@@ -10,6 +10,98 @@ function asNumber(value: any): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+const BMTC_PLACE_NAMES = [
+  'Majestic',
+  'Kempegowda Bus Station',
+  'Shivajinagar',
+  'KR Market',
+  'Town Hall',
+  'Corporation',
+  'Richmond Circle',
+  'MG Road',
+  'Brigade Road',
+  'Trinity',
+  'Mayo Hall',
+  'Cubbon Park',
+  'Vidhana Soudha',
+  'Lalbagh Main Gate',
+  'Wilson Garden',
+  'NIMHANS',
+  'Dairy Circle',
+  'Jayadeva Hospital',
+  'Ragigudda Temple',
+  'MICO Layout',
+  'BTM Layout',
+  'BTM Water Tank',
+  'Silk Board',
+  'Bommanahalli',
+  'JP Nagar',
+  'Banashankari',
+  'Banashankari TTMC',
+  'Jayanagar 4th Block',
+  'Jayanagar 9th Block',
+  'Bannerghatta Road',
+  'Arekere',
+  'Hulimavu',
+  'Electronic City',
+  'Wipro Gate',
+  'Infosys Gate',
+  'Koramangala',
+  'Domlur',
+  'Indiranagar',
+  'HAL Main Gate',
+  'Murugeshpalya',
+  'Marathahalli Bridge',
+  'Marathahalli',
+  'Kundalahalli Gate',
+  'Kundalahalli Colony',
+  'BEML Layout',
+  'Brookefield',
+  'ITPL',
+  'Whitefield',
+  'Whitefield TTMC',
+  'Whitefield (Vydehi Hospital)',
+  'Hope Farm',
+  'Kadugodi',
+  'Hoodi',
+  'Mahadevapura',
+  'Tin Factory',
+  'KR Puram',
+  'Baiyappanahalli',
+  'Bellandur',
+  'Eco Space',
+  'Eco World',
+  'Kadubeesanahalli',
+  'Embassy Tech Village',
+  'Manyata Tech Park',
+  'Hebbal',
+  'Nagawara',
+  'Hennur Cross',
+  'Thanisandra',
+  'Yeshwanthpur',
+  'Rajajinagar',
+  'Malleshwaram',
+  'Peenya',
+  'BEL Circle',
+  'Jalahalli',
+  'Yelahanka',
+  'Mekhri Circle',
+  'Vijayanagar',
+  'Attiguppe',
+  'Nagarbhavi',
+  'Kengeri',
+  'Mysore Road Bus Station',
+  'Magadi Road',
+  'Chandra Layout',
+  'Basavanagudi',
+  'Gandhi Bazaar',
+  'Chamarajpet',
+  'Austin Town',
+  'Shantinagar',
+  'Cantonment Railway Station',
+  'KSR Bengaluru Railway Station',
+];
+
 function hasTravelTicketSignals(rawText: string): boolean {
   const lines = rawText
     .split(/\r?\n/)
@@ -31,6 +123,10 @@ function hasTravelTicketSignals(rawText: string): boolean {
   return hasHardTravelWord || score >= 2 || (hasStandaloneTo && hasFareAmount);
 }
 
+function hasDepotSignal(rawText: string): boolean {
+  return /\bdepot\b/i.test(rawText);
+}
+
 function hasFuelBillSignals(rawText: string): boolean {
   const hasBrand = /\b(indian\s*oil|indianoil|bharat\s*petroleum|bharath\s*petroleum|bpcl|hindustan\s*petroleum|hpcl)\b/i.test(rawText);
   const hasFuelProduct = /\b(petrol|diesel|fuel)\b/i.test(rawText);
@@ -46,6 +142,10 @@ function hasPurchaseReceiptSignals(rawText: string): boolean {
 function detectDocumentKind(data: any, rawText: string): 'purchase' | 'ticket' | 'refund' | 'fuel' {
   const text = rawText.toLowerCase();
   const doc = data?.document || {};
+
+  if (hasDepotSignal(rawText)) {
+    return 'ticket';
+  }
 
   if (
     hasFuelBillSignals(rawText) ||
@@ -81,6 +181,7 @@ function detectDocumentKind(data: any, rawText: string): 'purchase' | 'ticket' |
 
 function detectTransportType(data: any, rawText: string): string {
   const existing = data?.document?.transport_type || '';
+  if (hasDepotSignal(rawText)) return 'bus';
   if (existing) return existing;
   if (/train|railway|pnr|irctc|boarding|departure|arrival/i.test(rawText)) return 'train';
   if (/flight|airline|airport|boarding pass/i.test(rawText)) return 'flight';
@@ -248,18 +349,118 @@ function normalizeBmtcFareAmount(value: number, rawText: string): number {
 }
 
 function isBmtcTicket(rawText: string): boolean {
-  return /\b(bmtc|bmrtc|bangalore metropolitan|ordinary\s+kas|kas\d|depot-\d+|depot\s*\d+)\b/i.test(rawText);
+  return /\b(bmtc|bmrtc|bangalore metropolitan|ordinary\s+kas|kas\d|depot)\b/i.test(rawText);
 }
 
 function findBmtcFareTotal(rawText: string): number {
   if (!isBmtcTicket(rawText)) return findTotal(rawText);
 
-  const fareMatches = [
-    ...rawText.matchAll(/(?:total|fare|ad)\s*[;:=\- ]*(?:1x)?\s*(?:Rs\.?|INR|\u20B9)?\s*([0-9,]+(?:\.\d{1,2})?)/gi),
-  ];
-  const value = fareMatches.length ? asNumber(fareMatches[fareMatches.length - 1][1]) : findTotal(rawText);
+  const paymentLine = rawText
+    .split(/\r?\n/)
+    .find((line) => /\b(cash|upi)\b/i.test(line) && /(?:Rs\.?|INR|\u20B9)?\s*[0-9,]+(?:\.\d{1,2})?/i.test(line));
+
+  if (paymentLine) {
+    const amounts = [...paymentLine.matchAll(/(?:Rs\.?|INR|\u20B9)?\s*([0-9,]+(?:\.\d{1,2})?)/gi)]
+      .map((match) => asNumber(match[1]))
+      .filter((amount) => amount > 0);
+    if (amounts.length) return normalizeBmtcFareAmount(amounts[amounts.length - 1], rawText);
+  }
+
+  const cashOrUpiMatch = rawText.match(/(?:Rs\.?|INR|\u20B9)?\s*([0-9,]+(?:\.\d{1,2})?)\s*\(?\s*(?:cash|upi)\s*\)?/i);
+  if (cashOrUpiMatch) return normalizeBmtcFareAmount(asNumber(cashOrUpiMatch[1]), rawText);
+
+  const fareLine = rawText
+    .split(/\r?\n/)
+    .find((line) => /\b(ad|fare|total)\b/i.test(line) && /(?:Rs\.?|INR|\u20B9)\s*[0-9,]+(?:\.\d{1,2})?/i.test(line));
+
+  if (fareLine) {
+    const amounts = [...fareLine.matchAll(/(?:Rs\.?|INR|\u20B9)\s*([0-9,]+(?:\.\d{1,2})?)/gi)]
+      .map((match) => asNumber(match[1]))
+      .filter((amount) => amount > 0);
+    if (amounts.length) return normalizeBmtcFareAmount(amounts[amounts.length - 1], rawText);
+  }
+
+  const value = findTotal(rawText);
 
   return normalizeBmtcFareAmount(value, rawText);
+}
+
+function normalizePlaceForMatch(value: string): string {
+  return cleanEnglishText(value)
+    .toLowerCase()
+    .replace(/\b(central|towards|toward|ttmc|bus|station|main)\b/g, ' ')
+    .replace(/hebbala/g, 'hebbal')
+    .replace(/vydehi|vydeh/i, 'vydehi')
+    .replace(/flospital|hspital|hospitali/g, 'hospital')
+    .replace(/figld|fieid|feild/g, 'field')
+    .replace(/silkboard/g, 'silk board')
+    .replace(/white\s*field/g, 'whitefield')
+    .replace(/[^a-z0-9]+/g, '')
+    .trim();
+}
+
+function editDistance(a: string, b: string): number {
+  if (a === b) return 0;
+  if (!a) return b.length;
+  if (!b) return a.length;
+
+  const previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+
+  for (let i = 1; i <= a.length; i++) {
+    let lastDiagonal = previous[0];
+    previous[0] = i;
+
+    for (let j = 1; j <= b.length; j++) {
+      const oldDiagonal = previous[j];
+      previous[j] = Math.min(
+        previous[j] + 1,
+        previous[j - 1] + 1,
+        lastDiagonal + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+      lastDiagonal = oldDiagonal;
+    }
+  }
+
+  return previous[b.length];
+}
+
+function canonicalizeBmtcPlace(value: string): string {
+  const cleaned = cleanPlaceName(value);
+  const normalized = normalizePlaceForMatch(cleaned);
+
+  if (!normalized || normalized.length < 4) return cleaned;
+
+  if (/\bdepot\s*[- ]?\s*\d+\b/i.test(cleaned)) {
+    return cleaned.replace(/\s+\(/g, ' (').trim();
+  }
+
+  if (/vydehi|hospital/.test(normalized) && /whitefield|field/.test(normalized)) {
+    return 'Whitefield (Vydehi Hospital)';
+  }
+
+  if (/hebbal/.test(normalized)) return 'Hebbal';
+  if (/silkboard/.test(normalized)) return 'Silk Board';
+
+  let best = '';
+  let bestDistance = Number.MAX_SAFE_INTEGER;
+
+  for (const place of BMTC_PLACE_NAMES) {
+    const placeNormalized = normalizePlaceForMatch(place);
+    if (!placeNormalized) continue;
+
+    if (normalized.includes(placeNormalized) || placeNormalized.includes(normalized)) {
+      return place;
+    }
+
+    const distance = editDistance(normalized, placeNormalized);
+    const threshold = Math.max(2, Math.floor(placeNormalized.length * 0.22));
+    if (distance <= threshold && distance < bestDistance) {
+      best = place;
+      bestDistance = distance;
+    }
+  }
+
+  return best || cleaned;
 }
 
 function cleanPlaceName(value: string): string {
@@ -327,8 +528,41 @@ function isRoutePlaceLine(line: string): boolean {
     && !/(total|amount|fare|rs\.?|\u20B9|upi|ordinary|ticket|no:|ad:|bmtc|ksrtc|phone|date|time|boarding at|booked from|departure|arrival|pnr|class|train|payment|passenger|quota|distance|kannada|english text|text line)/i.test(cleaned);
 }
 
-function isStrongBusDestinationLine(line: string): boolean {
-  return /\b(depot|gate|towards|station|stand|terminal|stop|road|circle|cross|market|junction|bridge|temple|hospital|field|hall)\b/i.test(line);
+function bmtcPlaceConfidence(line: string): number {
+  const cleaned = cleanPlaceName(line);
+  const normalized = normalizePlaceForMatch(cleaned);
+  const alpha = cleaned.replace(/[^A-Za-z]/g, '');
+  const symbolCount = (cleaned.match(/[.,'"`~!@#$%^*_+=|\\<>?]/g) || []).length;
+  const digitCount = (cleaned.match(/\d/g) || []).length;
+  let score = 0;
+
+  if (!alpha || alpha.length < 4) return 0;
+  if (symbolCount >= 2 && !/\bdepot\b/i.test(cleaned)) score -= 4;
+  if (digitCount >= 3 && !/\bdepot\s*[- ]?\d+\b/i.test(cleaned)) score -= 3;
+  if (/[A-Z][a-z]{2,}/.test(cleaned)) score += 2;
+  if (/[A-Za-z]{3,}\s+[A-Za-z]{3,}/.test(cleaned)) score += 3;
+  if (/\b(depot|gate|towards|temple|field|hospital|stand|station|terminal|stop|road|circle|cross|market|junction|bridge|hall)\b/i.test(cleaned)) score += 5;
+
+  for (const place of BMTC_PLACE_NAMES) {
+    const placeNormalized = normalizePlaceForMatch(place);
+    if (!placeNormalized) continue;
+    if (normalized.includes(placeNormalized) || placeNormalized.includes(normalized)) score += 8;
+    else if (editDistance(normalized, placeNormalized) <= Math.max(2, Math.floor(placeNormalized.length * 0.22))) score += 6;
+  }
+
+  return score;
+}
+
+function isEnglishRouteCandidate(line: string): boolean {
+  const cleaned = cleanPlaceName(line);
+  const original = String(line || '');
+
+  if (!cleaned || !/[A-Za-z]{3,}/.test(cleaned)) return false;
+  if (/[\u0C80-\u0CFF\u0D00-\u0D7F\u0900-\u097F]/.test(original) && !/[A-Za-z]{3,}/.test(original)) return false;
+  if (!isRoutePlaceLine(cleaned)) return false;
+  if (/^\d|^\W*$/.test(cleaned)) return false;
+
+  return bmtcPlaceConfidence(cleaned) >= 2;
 }
 
 function isRouteSeparator(line: string): boolean {
@@ -340,22 +574,26 @@ function isRouteSeparator(line: string): boolean {
   return normalized === 'TO';
 }
 
-function findNearestEnglishPlace(lines: string[], startIndex: number, direction: -1 | 1): string {
-  const candidates: string[] = [];
+function findFirstEnglishPlaceFromTo(lines: string[], startIndex: number, direction: -1 | 1): string {
   let scanned = 0;
+  let bestLine = '';
+  let bestScore = 0;
 
-  for (let index = startIndex; index >= 0 && index < lines.length && scanned < 8; index += direction, scanned++) {
-    const place = cleanPlaceName(lines[index]);
-    if (isRoutePlaceLine(place)) {
-      candidates.push(place);
+  for (let index = startIndex; index >= 0 && index < lines.length && scanned < 10; index += direction, scanned++) {
+    if (isEnglishRouteCandidate(lines[index])) {
+      const score = bmtcPlaceConfidence(lines[index]);
+      if (score > bestScore) {
+        bestLine = lines[index];
+        bestScore = score;
+      }
+
+      if (direction === -1 || score >= 7) {
+        return canonicalizeBmtcPlace(lines[index]);
+      }
     }
   }
 
-  if (direction === 1) {
-    return candidates.find(isStrongBusDestinationLine) || candidates[0] || '';
-  }
-
-  return candidates[0] || '';
+  return bestLine ? canonicalizeBmtcPlace(bestLine) : '';
 }
 
 function extractRouteAroundTo(rawLines: string[]): { pickup: string; destination: string } {
@@ -365,8 +603,8 @@ function extractRouteAroundTo(rawLines: string[]): { pickup: string; destination
     .map(({ index }) => index);
 
   for (const toIndex of toIndexes) {
-    const pickup = findNearestEnglishPlace(rawLines, toIndex - 1, -1);
-    const destination = findNearestEnglishPlace(rawLines, toIndex + 1, 1);
+    const pickup = findFirstEnglishPlaceFromTo(rawLines, toIndex - 1, -1);
+    const destination = findFirstEnglishPlaceFromTo(rawLines, toIndex + 1, 1);
 
     if (pickup && destination && pickup.toLowerCase() !== destination.toLowerCase()) {
       return { pickup, destination };
@@ -599,7 +837,7 @@ function inferTicketTravel(rawText: string, travel: any) {
   if (toIndex > 0 && !travel.pickup_point) {
     for (let index = toIndex - 1; index >= 0; index--) {
       if (isUsefulPlaceLine(rawLines[index])) {
-        travel.pickup_point = cleanPlaceName(rawLines[index]);
+        travel.pickup_point = canonicalizeBmtcPlace(rawLines[index]);
         break;
       }
     }
@@ -608,14 +846,14 @@ function inferTicketTravel(rawText: string, travel: any) {
   if (toIndex >= 0 && !travel.destination) {
     for (let index = toIndex + 1; index < rawLines.length; index++) {
       if (isUsefulPlaceLine(rawLines[index])) {
-        travel.destination = cleanPlaceName(rawLines[index]);
+        travel.destination = canonicalizeBmtcPlace(rawLines[index]);
         break;
       }
     }
   }
 
   const usefulPlaces = rawLines
-    .map((line, index) => ({ index, value: cleanPlaceName(line) }))
+    .map((line, index) => ({ index, value: canonicalizeBmtcPlace(line) }))
     .filter((line) => isUsefulPlaceLine(line.value));
 
   if ((!travel.pickup_point || !travel.destination) && usefulPlaces.length >= 2) {
@@ -681,6 +919,32 @@ function isNonItemReceiptLine(line: string): boolean {
   );
 }
 
+function isAmountOnlyLine(line: string): boolean {
+  return /^(?:Rs\.?|INR|\u20B9|[$])?\s*[0-9,]+(?:\.[0-9]{1,2})?\s*$/.test(line.trim());
+}
+
+function parseTrailingAmount(line: string): number {
+  const match = line.match(/(?:Rs\.?|INR|\u20B9|[$])?\s*([0-9,]+(?:\.[0-9]{1,2})?)\s*$/i);
+  return match ? asNumber(match[1]) : 0;
+}
+
+function pushPurchaseItem(items: any[], name: string, quantity: number, totalPrice: number, rawText: string) {
+  const cleanName = cleanItemName(name);
+  const cleanQuantity = asNumber(quantity) || 1;
+  const cleanTotal = asNumber(totalPrice);
+
+  if (cleanName.length < 2 || cleanTotal <= 0 || /^\d+$/.test(cleanName)) return;
+  if (isNonItemReceiptLine(cleanName)) return;
+
+  items.push({
+    name: cleanName,
+    quantity: cleanQuantity,
+    unit_price: cleanQuantity ? cleanTotal / cleanQuantity : cleanTotal,
+    total_price: cleanTotal,
+    category: inferPurchaseCategory(cleanName, rawText),
+  });
+}
+
 function isSuspiciousPurchaseItem(item: any, receiptTotal: number): boolean {
   const name = String(item?.name || '');
   const totalPrice = asNumber(item?.total_price);
@@ -693,15 +957,124 @@ function isSuspiciousPurchaseItem(item: any, receiptTotal: number): boolean {
   );
 }
 
+function isLikelyIdentifierAmount(value: number, rawText: string, transaction: any): boolean {
+  if (!value || value < 1000 || !Number.isInteger(value)) return false;
+
+  const compactValue = String(value);
+  const receiptNumber = String(transaction?.receipt_number || '').replace(/\D/g, '');
+
+  if (receiptNumber && compactValue === receiptNumber) return true;
+
+  const escaped = compactValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const identifierPattern = new RegExp(
+    '\\b(?:receipt|rec|invoice|bill|voucher|transaction|txn|store|vcd|no|number|phone|mobile|gst|tin)\\s*[:#-]?\\s*' + escaped + '\\b',
+    'i',
+  );
+
+  return identifierPattern.test(rawText);
+}
+
+function hasReadableItemNameAndAmount(item: any, rawText: string, transaction: any, receiptTotal: number): boolean {
+  const name = cleanItemName(String(item?.name || item?.description || ''));
+  const totalPrice = asNumber(item?.total_price || item?.amount || item?.price);
+
+  if (!/[A-Za-z]{2,}/.test(name)) return false;
+  if (totalPrice <= 0) return false;
+  if (isLikelyIdentifierAmount(totalPrice, rawText, transaction)) return false;
+  if (isSuspiciousPurchaseItem({ ...item, name, total_price: totalPrice }, receiptTotal)) return false;
+
+  return true;
+}
+
+function hasProductTableHeaders(rawText: string): boolean {
+  return /name\s+of\s+product|product\s*\/\s*service|batch\s+no|mfg\s+date|expir(?:y|e)\s+date|hsn\s*\/\s*sac|taxable\s+value/i.test(rawText)
+    && /\b(qty|mrp|rate)\b/i.test(rawText);
+}
+
+function cleanTableProductName(value: string): string {
+  return cleanItemName(value)
+    .replace(/\b(?:batch|mfg|manufactur(?:e|ing)|expir(?:y|e)|hsn|sac|qty|mrp|rate|disc|taxable|value)\b.*$/i, '')
+    .replace(/\b[A-Z]\d{1,6}\b\s*$/i, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+function parseTableQuantity(value: string): number {
+  const match = String(value || '').match(/\b([0-9]+(?:\.[0-9]+)?)\s*(?:tbs?|tabs?|btl|pkg|pcs?|nos?|strip|strips|units?)?\b/i);
+  return match ? asNumber(match[1]) : 1;
+}
+
+function extractProductTableItems(rawText: string) {
+  if (!hasProductTableHeaders(rawText)) return [];
+
+  const lines = rawText
+    .split(/\r?\n/)
+    .map((line) => cleanEnglishText(line).replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+  const items: any[] = [];
+
+  for (const line of lines) {
+    if (!/^[0-9]+\s+[A-Za-z]/.test(line)) continue;
+    if (/\b(total|subtotal|igst|cgst|sgst|tax|taxable\s+total|grand)\b/i.test(line)) continue;
+
+    const tokens = line.split(/\s+/);
+    const srNo = tokens.shift();
+    if (!srNo || !/^\d+$/.test(srNo)) continue;
+
+    const amountMatches = [...line.matchAll(/\b[0-9,]+\.[0-9]{2}\b/g)].map((match) => ({
+      value: asNumber(match[0]),
+      index: match.index ?? 0,
+    }));
+
+    if (amountMatches.length < 2) continue;
+
+    const firstAmountIndex = amountMatches[0].index;
+    const textBeforeAmounts = line.slice(String(srNo).length, firstAmountIndex).trim();
+    const quantityMatch = textBeforeAmounts.match(/\b([0-9]+(?:\.[0-9]+)?)\s*(?:tbs?|tabs?|btl|pkg|pcs?|nos?|strip|strips|units?)\b/i);
+    const quantity = quantityMatch ? parseTableQuantity(quantityMatch[0]) : 1;
+    const nameSource = quantityMatch
+      ? textBeforeAmounts.slice(0, quantityMatch.index).trim()
+      : textBeforeAmounts;
+    const nameWithoutCodes = nameSource
+      .replace(/\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}\b/gi, ' ')
+      .replace(/\b\d{6,10}\b/g, ' ')
+      .replace(/\b[A-Z]\d{1,6}\b/g, ' ');
+    const name = cleanTableProductName(nameWithoutCodes);
+
+    if (!/[A-Za-z]{2,}/.test(name)) continue;
+
+    const mrp = amountMatches[0]?.value || 0;
+    const rate = amountMatches[1]?.value || mrp;
+    const lineTotal = amountMatches.length >= 4
+      ? amountMatches[amountMatches.length - 1].value
+      : rate * quantity;
+
+    items.push({
+      name,
+      quantity,
+      unit_price: rate,
+      total_price: lineTotal,
+      category: inferPurchaseCategory(name, rawText),
+      mrp,
+    });
+  }
+
+  return items;
+}
+
 function extractPurchaseItems(rawText: string) {
+  const tableItems = extractProductTableItems(rawText);
+  if (tableItems.length) return tableItems;
+
   const lines = rawText
     .split(/\r?\n/)
     .map((line) => cleanEnglishText(line))
-    .filter((line) => /[A-Za-z]/.test(line) && /\d/.test(line));
+    .map((line) => line.replace(/\s+/g, ' ').trim())
+    .filter((line) => line && !/^[-_=]+$/.test(line));
   const items: any[] = [];
 
-  for (const rawLine of lines) {
-    const line = rawLine.replace(/\s+/g, ' ').trim();
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
 
     if (!line || isNonItemReceiptLine(line)) {
       continue;
@@ -724,19 +1097,43 @@ function extractPurchaseItems(rawText: string) {
 
     const leadingQtyAmountMatch = line.match(/^([0-9]+(?:\.[0-9]+)?)\s+(.+?)\s+(?:Rs\.?|INR|\u20B9|[$])?\s*([0-9,]+(?:\.[0-9]{1,2})?)$/i);
     if (leadingQtyAmountMatch) {
+      const hasExplicitLineAmount = /(?:Rs\.?|INR|\u20B9|[$])\s*[0-9,]+(?:\.[0-9]{1,2})?\s*$/i.test(line)
+        || /[0-9,]+\.[0-9]{1,2}\s*$/.test(line);
+      if (!hasExplicitLineAmount) {
+        continue;
+      }
+
       const quantity = asNumber(leadingQtyAmountMatch[1]) || 1;
       const name = cleanItemName(leadingQtyAmountMatch[2]);
       const totalPrice = asNumber(leadingQtyAmountMatch[3]);
 
       if (name.length >= 2 && totalPrice > 0) {
-        items.push({
-          name,
-          quantity,
-          unit_price: quantity ? totalPrice / quantity : totalPrice,
-          total_price: totalPrice,
-          category: inferPurchaseCategory(name, rawText),
-        });
+        pushPurchaseItem(items, name, quantity, totalPrice, rawText);
       }
+      continue;
+    }
+
+    if (isAmountOnlyLine(line) && index > 0) {
+      const totalPrice = parseTrailingAmount(line);
+
+      for (let previousIndex = index - 1; previousIndex >= 0 && previousIndex >= index - 4; previousIndex--) {
+        const previousLine = lines[previousIndex];
+        if (!previousLine || isAmountOnlyLine(previousLine)) continue;
+        if (isNonItemReceiptLine(previousLine)) break;
+        if (!/[A-Za-z]{2,}/.test(previousLine)) continue;
+
+        const splitLineMatch = previousLine.match(/^(?:([0-9]+(?:\.[0-9]+)?)\s+)?(.+?)$/);
+        const quantity = asNumber(splitLineMatch?.[1]) || 1;
+        const name = cleanItemName(splitLineMatch?.[2] || previousLine);
+
+        pushPurchaseItem(items, name, quantity, totalPrice, rawText);
+        break;
+      }
+
+      continue;
+    }
+
+    if (!/[A-Za-z]/.test(line) || !/\d/.test(line)) {
       continue;
     }
 
@@ -792,14 +1189,16 @@ function normalizePurchase(data: any, rawText: string) {
     const quantity = asNumber(item.quantity) || 1;
     const unitPrice = asNumber(item.unit_price ?? item.price);
     const totalPrice = asNumber(item.total_price) || unitPrice * quantity;
+    const name = cleanItemName(item.name || item.description || '');
+
     return {
-      name: item.name || item.description || '',
+      name,
       quantity,
       unit_price: unitPrice || (quantity ? totalPrice / quantity : totalPrice),
       total_price: totalPrice,
       category: item.category || '',
     };
-  }).filter((item: any) => item.name || item.total_price > 0);
+  }).filter((item: any) => hasReadableItemNameAndAmount(item, rawText, transaction, rawTotal));
   const fallbackItems = extractPurchaseItems(rawText);
   const aiItemsLookBad = aiItems.length === 0 || aiItems.some((item: any) => isSuspiciousPurchaseItem(item, rawTotal));
   const items = aiItemsLookBad && fallbackItems.length ? fallbackItems : aiItems;
@@ -882,9 +1281,14 @@ function normalizeTicket(data: any, rawText: string) {
     travel.route = String(travel.route || '').trim();
     travel.ticket_number = String(travel.ticket_number || travel.ticketNumber || travel.pnr || '').trim();
     inferTicketTravel(rawText, travel);
+    travel.pickup_point = canonicalizeBmtcPlace(travel.pickup_point || '');
+    travel.destination = canonicalizeBmtcPlace(travel.destination || '');
 
     const ticketMatch = rawText.match(/\b(?:ticket|pnr|booking|trip|journey|no|number)\b\s*[:#-]?\s*([A-Z0-9][A-Z0-9\/-]{2,})|#\s*([A-Z0-9][A-Z0-9\/-]{2,})/i);
     if (!travel.ticket_number && ticketMatch) travel.ticket_number = ticketMatch[1] || ticketMatch[2];
+    if (travel.pickup_point && travel.destination) {
+      travel.route = travel.pickup_point + ' to ' + travel.destination;
+    }
   }
 
   const discounts = normalizeDiscounts(data.totals?.discounts || data.discounts || [], rawText);

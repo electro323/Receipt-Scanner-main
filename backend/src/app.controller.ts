@@ -3,15 +3,19 @@ import {
   Controller,
   Get,
   Header,
+  HttpException,
+  HttpStatus,
   Param,
   Post,
   Put,
+  Query,
+  Req,
   Res,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import * as Tesseract from 'tesseract.js';
 import { existsSync, promises as fs } from 'fs';
 import { extname, join } from 'path';
@@ -29,6 +33,13 @@ import {
 
 @Controller()
 export class AppController {
+  private readonly processingQueue: Array<{ file: any; transactionId: string }> = [];
+  private activeProcessingJobs = 0;
+  private readonly maxProcessingJobs = Math.max(
+    1,
+    Number(process.env.RECEIPT_PROCESSING_CONCURRENCY || 2),
+  );
+
   constructor(private readonly receiptService: ReceiptService) {}
 
   @Post(['upload', 'receipts'])
@@ -39,6 +50,7 @@ export class AppController {
   )
   async uploadReceipt(
     @UploadedFile() file: any,
+    @Req() request: Request,
   ) {
     if (!file) {
       return {
@@ -47,9 +59,17 @@ export class AppController {
       };
     }
 
+    const userId = this.getRequestUserId(request);
+    const rateLimit = await this.checkUploadRateLimit(userId);
+
+    if (!rateLimit.allowed) {
+      await fs.unlink(file.path).catch(() => undefined);
+      throw new HttpException(rateLimit.message, HttpStatus.TOO_MANY_REQUESTS);
+    }
+
     const transactionId = 'TXN-' + Date.now();
     const fileHash = await this.calculateFileHash(file.path);
-    const duplicate = await this.findExistingDuplicateByHash(fileHash);
+    const duplicate = await this.findExistingDuplicateByHash(fileHash, userId);
 
     if (duplicate) {
       await this.receiptService.createReceipt(
@@ -58,6 +78,7 @@ export class AppController {
         file.originalname,
         file.mimetype,
         fileHash,
+        userId,
         'duplicate_pending',
         duplicate.transactionId,
       );
@@ -77,15 +98,16 @@ export class AppController {
       file.originalname,
       file.mimetype,
       fileHash,
+      userId,
     );
 
-    void this.processReceiptInBackground(file, transactionId);
+    this.enqueueReceiptProcessing(file, transactionId);
 
     return {
       success: true,
       transactionId,
       status: 'processing',
-      message: 'Receipt uploaded. Processing started.',
+      message: 'Receipt uploaded. Processing will continue in the background.',
     };
   }
 
@@ -102,7 +124,7 @@ export class AppController {
       };
     }
 
-    void this.processReceiptInBackground(
+    this.enqueueReceiptProcessing(
       {
         path: receipt.filePath,
         originalname: receipt.originalName,
@@ -205,16 +227,27 @@ export class AppController {
         let totalConfidence = 0;
         const langPath = this.getTesseractLangPath();
 
-        for (const imagePath of imagePaths) {
-          const processedImagePaths = await preprocessImage(imagePath);
-          const result = await this.recognizeBestVariantFast(processedImagePaths, langPath);
+        for (let index = 0; index < imagePaths.length; index++) {
+          const imagePath = imagePaths[index];
+          const quality = qualityResults[index];
+          const mode = this.pickPreprocessMode(quality);
+          const processedImagePaths = await preprocessImage(imagePath, mode);
+          const result = await this.recognizeBestVariantFast(
+            processedImagePaths,
+            langPath,
+            mode,
+          );
           console.log('OCR image variant selected:', result.imagePath);
           console.log('OCR language selected:', result.language);
+          console.log('OCR preprocessing mode:', mode);
           combinedText += result.text + '\n';
           totalConfidence += result.confidence || 0;
         }
 
-        rawText = combinedText.trim();
+        rawText = this.normalizeOcrText(combinedText.trim());
+        if (this.hasBmtcOcrSignals(rawText)) {
+          rawText = this.stripNonEnglishOnlyLines(rawText);
+        }
         averageConfidence = imagePaths.length > 0 ? totalConfidence / imagePaths.length : 0;
       }
 
@@ -309,8 +342,45 @@ export class AppController {
   }
 
   @Get('receipts')
-  async getReceipts() {
-    return this.receiptService.findAll();
+  async getReceipts(
+    @Req() request: Request,
+  ) {
+    return this.receiptService.findAll(this.getRequestUserId(request));
+  }
+
+  private enqueueReceiptProcessing(file: any, transactionId: string) {
+    this.processingQueue.push({ file, transactionId });
+    this.drainReceiptProcessingQueue();
+  }
+
+  private drainReceiptProcessingQueue() {
+    while (
+      this.activeProcessingJobs < this.maxProcessingJobs
+      && this.processingQueue.length > 0
+    ) {
+      const job = this.processingQueue.shift();
+      if (!job) return;
+
+      this.activeProcessingJobs++;
+      setImmediate(() => {
+        void this.processReceiptInBackground(job.file, job.transactionId)
+          .finally(() => {
+            this.activeProcessingJobs--;
+            this.drainReceiptProcessingQueue();
+          });
+      });
+    }
+  }
+
+  @Get('analytics/monthly')
+  async getMonthlyAnalytics(
+    @Req() request: Request,
+    @Query('month') month = '',
+  ) {
+    return this.receiptService.getMonthlyCategoryAnalytics(
+      this.getRequestUserId(request),
+      month,
+    );
   }
 
   @Get(['receipt/:transactionId/preview', 'receipts/:transactionId/preview'])
@@ -518,30 +588,114 @@ export class AppController {
     return candidates.sort((a, b) => b.score - a.score)[0];
   }
 
-  private async recognizeBestVariantFast(imagePaths: string[], langPath: string) {
-    const candidates = [];
-    const maxFastVariants = Math.min(imagePaths.length, 4);
+  private pickPreprocessMode(quality: any): 'fast' | 'balanced' | 'strong' {
+    if (!quality) return 'balanced';
+    if (quality.edgeScore >= 7 && quality.stddev >= 38) return 'fast';
+    if (quality.edgeScore < 3.5 || quality.stddev < 24) return 'strong';
+    return 'balanced';
+  }
 
+  private async recognizeBestVariantFast(
+    imagePaths: string[],
+    langPath: string,
+    mode: 'fast' | 'balanced' | 'strong' = 'balanced',
+  ) {
+    const segmentPaths = imagePaths.filter((imagePath) => /-segment-\d+\.png$/i.test(imagePath));
+    const wholeImagePaths = imagePaths.filter((imagePath) => !/-segment-\d+\.png$/i.test(imagePath));
+    const candidates = [];
+    const maxFastVariants = Math.min(
+      wholeImagePaths.length,
+      mode === 'fast' ? 3 : mode === 'strong' ? 5 : 3,
+    );
     for (let index = 0; index < maxFastVariants; index++) {
-      const candidate = await this.recognizeEnglishOnly(imagePaths[index], langPath);
+      const candidate = await this.recognizeEnglishOnly(wholeImagePaths[index], langPath);
       candidates.push(candidate);
 
-      if (candidate.score >= 135 && candidate.confidence >= 64 && this.hasUsefulOcrDetail(candidate.text)) {
+      if (this.isExcellentOcr(candidate) && this.isCompleteEnoughForEarlyReturn(candidate.text)) {
+        return candidate;
+      }
+
+      if (mode === 'fast' && this.isGoodOcr(candidate)) {
         return candidate;
       }
     }
 
     let best = candidates.sort((a, b) => b.score - a.score)[0];
 
-    if (best.score >= 125 && best.confidence >= 55 && this.hasUsefulOcrDetail(best.text)) {
+    if (this.isGoodOcr(best)) {
       return best;
     }
 
-    const fallbackImagePath = best?.imagePath || imagePaths[0];
+    if (mode !== 'strong' && best?.score >= 112 && best?.confidence >= 48 && this.hasUsefulOcrDetail(best.text)) {
+      return best;
+    }
+
+    if (this.hasBmtcOcrSignals(best?.text || '') && best?.score >= 80) {
+      return best;
+    }
+
+    if (mode === 'strong' && segmentPaths.length >= 2) {
+      const segmented = await this.recognizeReceiptSegments(segmentPaths, langPath);
+      if (segmented && (!best || segmented.score > best.score || this.hasMoreReceiptDetail(segmented.text, best.text))) {
+        return segmented;
+      }
+    }
+
+    const fallbackImagePath = best?.imagePath || wholeImagePaths[0] || imagePaths[0];
     const multilingual = await this.recognizeMultilingualFallback(fallbackImagePath, langPath);
     best = [best, multilingual].filter(Boolean).sort((a, b) => b.score - a.score)[0];
 
     return best;
+  }
+
+  private async recognizeReceiptSegments(segmentPaths: string[], langPath: string) {
+    const sortedSegments = [...segmentPaths].sort();
+    const results = [];
+
+    for (const segmentPath of sortedSegments.slice(0, 8)) {
+      const result = await this.recognizeEnglishOnly(segmentPath, langPath);
+      if (result.text.trim().length > 8) results.push(result);
+    }
+
+    if (!results.length) return null;
+
+    const text = results.map((result) => result.text.trim()).join('\n');
+    const confidence = results.reduce((sum, result) => sum + result.confidence, 0) / results.length;
+
+    return {
+      language: 'eng-segments',
+      imagePath: sortedSegments[0] + ' +' + Math.max(0, results.length - 1) + ' segments',
+      text,
+      confidence,
+      score: this.scoreOCRResult(text, confidence) + Math.min(results.length * 4, 20),
+    };
+  }
+
+  private isExcellentOcr(candidate: any): boolean {
+    return candidate?.score >= 145
+      && candidate?.confidence >= 66
+      && this.hasUsefulOcrDetail(candidate.text)
+      && this.hasReceiptLineStructure(candidate.text);
+  }
+
+  private isGoodOcr(candidate: any): boolean {
+    return candidate?.score >= 126
+      && candidate?.confidence >= 56
+      && this.hasUsefulOcrDetail(candidate.text);
+  }
+
+  private isCompleteEnoughForEarlyReturn(text: string): boolean {
+    if (!this.hasBmtcOcrSignals(text)) return true;
+    return this.ocrCompletenessScore(text) >= 2;
+  }
+
+  private ocrCompletenessScore(text: string): number {
+    let score = 0;
+    if (/\bto\b/i.test(text)) score += 1;
+    if (/\b(depot\s*[- ]?\d+|gate|temple|field|hospital|towards)\b/i.test(text)) score += 1;
+    if (/(?:Rs\.?|INR|\u20B9)\s*\d+(?:\.\d{1,2})?/i.test(text)) score += 1;
+    if (/\b(cash|upi)\b/i.test(text)) score += 1;
+    return score;
   }
 
   private hasUsefulOcrDetail(text: string): boolean {
@@ -550,6 +704,65 @@ export class AppController {
     const receiptSignals = (text.match(/\b(total|amount|receipt|invoice|bill|qty|quantity|item|price|tax|gst|upi|cash|card|ticket|fare|petrol|diesel|pharmacy|restaurant)\b|\u20B9|Rs\.?/gi) || []).length;
 
     return meaningfulWords >= 6 && amountMatches >= 2 && receiptSignals >= 2;
+  }
+
+  private hasReceiptLineStructure(text: string): boolean {
+    const usefulLines = text
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => /[A-Za-z]{2,}|[0-9]+/.test(line));
+    const priceLines = usefulLines.filter((line) => /(?:Rs\.?|INR|\u20B9|[$])?\s*[0-9]+(?:[,.][0-9]{1,2})?\s*$/i.test(line));
+
+    return usefulLines.length >= 6 && priceLines.length >= 2;
+  }
+
+  private hasMoreReceiptDetail(candidateText = '', currentText = ''): boolean {
+    const countDetails = (text: string) => {
+      const lines = text.split('\n').filter((line) => line.trim().length > 2).length;
+      const amounts = (text.match(/(?:Rs\.?|INR|\u20B9|[$])?\s*[0-9]+(?:[,.][0-9]{1,2})?/gi) || []).length;
+      const words = (text.match(/[A-Za-z]{3,}/g) || []).length;
+      return lines * 2 + amounts * 4 + words;
+    };
+
+    return countDetails(candidateText) > countDetails(currentText) + 8;
+  }
+
+  private normalizeOcrText(text: string): string {
+    return String(text || '')
+      .replace(/\r/g, '\n')
+      .replace(/[“”]/g, '"')
+      .replace(/[‘’]/g, "'")
+      .replace(/[|]/g, 'I')
+      .replace(/\bTOTAI\b/gi, 'TOTAL')
+      .replace(/\bSUBTOTAI\b/gi, 'SUBTOTAL')
+      .replace(/\bVlSA\b/g, 'VISA')
+      .replace(/\bUP1\b/g, 'UPI')
+      .replace(/([A-Za-z])\s{2,}([A-Za-z])/g, '$1 $2')
+      .replace(/[ \t]{2,}/g, ' ')
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line, index, lines) => line || (index > 0 && lines[index - 1]))
+      .join('\n')
+      .trim();
+  }
+
+  private hasBmtcOcrSignals(text: string): boolean {
+    return /\b(bmtc|bmrtc|depot\s*[- ]?\d+|ordinary|tkn|ticket|fare|cash|upi)\b/i.test(text)
+      && /\bto\b/i.test(text);
+  }
+
+  private stripNonEnglishOnlyLines(text: string): string {
+    return String(text || '')
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => {
+        if (!line) return false;
+        const hasIndianScript = /[\u0C80-\u0CFF\u0D00-\u0D7F\u0900-\u097F]/.test(line);
+        const hasEnglishOrNumber = /[A-Za-z0-9]/.test(line);
+        return !hasIndianScript || hasEnglishOrNumber;
+      })
+      .join('\n')
+      .trim();
   }
 
   private async recognizeMultilingualFallback(imagePath: string, langPath: string) {
@@ -619,12 +832,49 @@ export class AppController {
     return createHash('sha256').update(buffer).digest('hex');
   }
 
-  private async findExistingDuplicateByHash(fileHash: string) {
-    const existingHashedMatch = await this.receiptService.findDuplicateByFileHash(fileHash);
+  private getRequestUserId(request: Request): string {
+    const headerValue = request.headers['x-user-id'];
+    const rawUserId = Array.isArray(headerValue) ? headerValue[0] : headerValue;
+    const fallback = request.ip || request.socket?.remoteAddress || 'anonymous';
+
+    return String(rawUserId || fallback || 'anonymous')
+      .trim()
+      .replace(/[^a-zA-Z0-9._:-]/g, '')
+      .slice(0, 80) || 'anonymous';
+  }
+
+  private async checkUploadRateLimit(userId: string) {
+    const now = Date.now();
+    const hourStart = new Date(now - 60 * 60 * 1000);
+    const dayStart = new Date(now - 24 * 60 * 60 * 1000);
+    const [hourCount, dayCount] = await Promise.all([
+      this.receiptService.countUserUploadsSince(userId, hourStart),
+      this.receiptService.countUserUploadsSince(userId, dayStart),
+    ]);
+
+    if (hourCount >= 20) {
+      return {
+        allowed: false,
+        message: 'Upload limit reached. You can upload only 20 receipts per hour. Please try again later.',
+      };
+    }
+
+    if (dayCount >= 100) {
+      return {
+        allowed: false,
+        message: 'Daily upload limit reached. You can upload only 100 receipts per day. Please try again tomorrow.',
+      };
+    }
+
+    return { allowed: true, message: '' };
+  }
+
+  private async findExistingDuplicateByHash(fileHash: string, userId: string) {
+    const existingHashedMatch = await this.receiptService.findDuplicateByFileHash(fileHash, userId);
 
     if (existingHashedMatch) return existingHashedMatch;
 
-    const receipts = await this.receiptService.findAll();
+    const receipts = await this.receiptService.findAll(userId);
 
     for (const receipt of receipts) {
       if (!receipt?.filePath || receipt.status === 'cancelled') continue;

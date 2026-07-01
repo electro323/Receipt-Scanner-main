@@ -23,6 +23,9 @@ export class Receipt {
   @Prop({ default: '' })
   fileHash: string;
 
+  @Prop({ default: 'anonymous' })
+  userId: string;
+
   @Prop({ default: '' })
   duplicateOfTransactionId: string;
 
@@ -45,7 +48,7 @@ export class Receipt {
 export const ReceiptSchema = SchemaFactory.createForClass(Receipt);
 
 ReceiptSchema.index(
-  { vendorReceiptKey: 1 },
+  { userId: 1, vendorReceiptKey: 1 },
   {
     unique: true,
     partialFilterExpression: {
@@ -62,3 +65,5 @@ ReceiptSchema.index(
     },
   },
 );
+
+ReceiptSchema.index({ userId: 1, createdAt: -1 });

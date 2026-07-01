@@ -14,11 +14,13 @@ import {
 import { useEffect, useState } from 'react';
 import { useHistory } from 'react-router-dom';
 import './Home.css';
+import { getUserHeaders } from '../userIdentity';
 
 const History: React.FC = () => {
   const history = useHistory();
 
   const [receipts, setReceipts] = useState<any[]>([]);
+  const [analytics, setAnalytics] = useState<any>(null);
   const [searchId, setSearchId] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
 
@@ -29,7 +31,9 @@ const History: React.FC = () => {
     if (showLoader) setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:3000/receipts');
+      const response = await fetch('http://localhost:3000/receipts', {
+        headers: getUserHeaders(),
+      });
       const data = await response.json();
 
       if (Array.isArray(data)) {
@@ -45,6 +49,20 @@ const History: React.FC = () => {
       }
     } finally {
       if (showLoader) setLoading(false);
+    }
+  };
+
+  const loadAnalytics = async () => {
+    try {
+      const response = await fetch('http://localhost:3000/analytics/monthly', {
+        headers: getUserHeaders(),
+      });
+      const data = await response.json();
+
+      setAnalytics(data);
+    } catch (error) {
+      console.error('ANALYTICS LOAD ERROR:', error);
+      setAnalytics(null);
     }
   };
 
@@ -115,8 +133,10 @@ const History: React.FC = () => {
 
   useEffect(() => {
     loadReceipts();
+    void loadAnalytics();
     const interval = setInterval(() => {
       void loadReceipts(false);
+      void loadAnalytics();
     }, 3000);
 
     return () => clearInterval(interval);
@@ -132,6 +152,14 @@ const History: React.FC = () => {
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
+    });
+  };
+
+  const formatMoney = (value: any) => {
+    const amount = Number(value || 0);
+    return '₹' + amount.toLocaleString('en-IN', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     });
   };
 
@@ -172,6 +200,48 @@ const History: React.FC = () => {
             >
               Search Receipt
             </IonButton>
+          </div>
+
+          <div className="card analytics-card">
+            <div className="history-header">
+              <div>
+                <p className="section-eyebrow">Monthly analytics</p>
+                <h2 className="section-title recent-title">
+                  Spending by Category
+                </h2>
+              </div>
+              <div className="analytics-total">
+                <span>{analytics?.month || 'This month'}</span>
+                <strong>{formatMoney(analytics?.total || 0)}</strong>
+              </div>
+            </div>
+
+            {!analytics || analytics.categories?.length === 0 ? (
+              <div className="empty-state table-empty">
+                <h3>No spending data yet</h3>
+                <p>Completed receipts from this month will appear here.</p>
+              </div>
+            ) : (
+              <div className="analytics-grid">
+                {analytics.categories.map((row: any) => (
+                  <div className="analytics-row" key={row.category}>
+                    <div className="analytics-row-top">
+                      <strong>{row.category}</strong>
+                      <span>{formatMoney(row.total)}</span>
+                    </div>
+                    <div className="analytics-bar-track">
+                      <div
+                        className="analytics-bar"
+                        style={{ width: Math.max(4, Math.min(100, Number(row.percentage || 0))) + '%' }}
+                      />
+                    </div>
+                    <div className="analytics-meta">
+                      {row.count} entries · {row.percentage}%
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="card history-table-card">
