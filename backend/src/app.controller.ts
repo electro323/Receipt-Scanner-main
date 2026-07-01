@@ -747,7 +747,7 @@ export class AppController {
   }
 
   private hasBmtcOcrSignals(text: string): boolean {
-    return /\b(bmtc|bmrtc|depot\s*[- ]?\d+|ordinary|tkn|ticket|fare|cash|upi)\b/i.test(text)
+    return /\b(bmtc|bmrtc|depot\s*[- ]?\d+|dep[o0a]t\s*[- ]?\d+|dept\s*[- ]?\d+|ordinary|tkn|ticket|fare|cash|upi)\b/i.test(text)
       && /\bto\b/i.test(text);
   }
 

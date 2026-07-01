@@ -109,22 +109,28 @@ function hasTravelTicketSignals(rawText: string): boolean {
     .filter(Boolean);
 
   const hasStandaloneTo = lines.some((line) => line === 'to' || line.startsWith('to '));
-  const hasDepot = /\bdepot\b/i.test(rawText);
-  const hasHardTravelWord = /\b(passanger|passenger|depot|departure|arrival|boarding|pnr|irctc|railway|train)\b/i.test(rawText);
+  const hasBmtc = hasBmtcSignal(rawText);
+  const hasDepot = hasDepotSignal(rawText);
+  const hasHardTravelWord = /\b(passanger|passenger|depot|departure|arrival|boarding|pnr|irctc|railway|train)\b/i.test(rawText) || hasBmtc;
   const hasFareAmount = /(?:fare|total|amount|ad)\s*[;:=\- ]*\s*(?:1x)?\s*(?:Rs\.?|INR|\u20B9)\s*\d+/i.test(rawText);
   const hasTicketNumber = /\b(?:ticket|pnr|booking|ordinary|trip|journey|train)\b\s*[:#-]?\s*[A-Z0-9][A-Z0-9\/-]{2,}/i.test(rawText);
-  const hasTransportWord = /\b(bus|ksrtc|bmrtc|ordinary|passanger|passenger|route|pickup|destination|departure|arrival|boarding|pnr|irctc|railway|train|from|fare|journey|ticket|depot)\b/i.test(rawText);
-  const hasRoutePlaces = hasStandaloneTo && lines.some((line) => /gate|field|hospital|stand|station|terminal|stop|road|circle|cross|depot|market/.test(line));
+  const hasTransportWord = /\b(bus|ksrtc|bmtc|bmrtc|ordinary|passanger|passenger|route|pickup|destination|departure|arrival|boarding|pnr|irctc|railway|train|from|fare|journey|ticket|depot|dept)\b/i.test(rawText);
+  const hasRoutePlaces = hasStandaloneTo && lines.some((line) => /gate|field|hospital|stand|station|terminal|stop|road|circle|cross|depot|dept|market|silk|kadubeesanahalli|marathahalli/.test(line));
 
-  const score = [hasStandaloneTo, hasFareAmount, hasTicketNumber, hasTransportWord, hasRoutePlaces, hasDepot, hasHardTravelWord]
+  const score = [hasStandaloneTo, hasFareAmount, hasTicketNumber, hasTransportWord, hasRoutePlaces, hasDepot, hasBmtc, hasHardTravelWord]
     .filter(Boolean)
     .length;
 
-  return hasHardTravelWord || score >= 2 || (hasStandaloneTo && hasFareAmount);
+  return hasHardTravelWord || (hasBmtc && hasStandaloneTo) || score >= 2 || (hasStandaloneTo && hasFareAmount);
 }
 
 function hasDepotSignal(rawText: string): boolean {
-  return /\bdepot\b/i.test(rawText);
+  return /\b(?:depot|dep[o0a]t|dept)\s*[-:]?\s*\d*\b/i.test(rawText);
+}
+
+function hasBmtcSignal(rawText: string): boolean {
+  return /\b(?:bmtc|bmrtc|bmtc\b|bangalore metropolitan|ordinary\s+kas|kas\d)\b/i.test(rawText)
+    || hasDepotSignal(rawText);
 }
 
 function hasFuelBillSignals(rawText: string): boolean {
@@ -143,7 +149,7 @@ function detectDocumentKind(data: any, rawText: string): 'purchase' | 'ticket' |
   const text = rawText.toLowerCase();
   const doc = data?.document || {};
 
-  if (hasDepotSignal(rawText)) {
+  if (hasBmtcSignal(rawText) || hasTravelTicketSignals(rawText)) {
     return 'ticket';
   }
 
@@ -159,7 +165,7 @@ function detectDocumentKind(data: any, rawText: string): 'purchase' | 'ticket' |
 
   if (
     hasPurchaseReceiptSignals(rawText) &&
-    !/\b(passanger|passenger|depot|departure|arrival|boarding|pnr|irctc|railway|train|bus|ksrtc|bmtc)\b/i.test(rawText)
+    !/\b(passanger|passenger|depot|dept|departure|arrival|boarding|pnr|irctc|railway|train|bus|ksrtc|bmtc|bmrtc)\b/i.test(rawText)
   ) {
     return 'purchase';
   }
@@ -181,12 +187,12 @@ function detectDocumentKind(data: any, rawText: string): 'purchase' | 'ticket' |
 
 function detectTransportType(data: any, rawText: string): string {
   const existing = data?.document?.transport_type || '';
-  if (hasDepotSignal(rawText)) return 'bus';
+  if (hasBmtcSignal(rawText)) return 'bus';
   if (existing) return existing;
   if (/train|railway|pnr|irctc|boarding|departure|arrival/i.test(rawText)) return 'train';
   if (/flight|airline|airport|boarding pass/i.test(rawText)) return 'flight';
   if (/taxi|cab|uber|ola|auto/i.test(rawText)) return 'taxi';
-  if (/bus|ksrtc|bmrtc|route|ordinary|depot/i.test(rawText)) return 'bus';
+  if (/bus|ksrtc|bmtc|bmrtc|route|ordinary|depot|dept/i.test(rawText)) return 'bus';
   return '';
 }
 
@@ -349,7 +355,7 @@ function normalizeBmtcFareAmount(value: number, rawText: string): number {
 }
 
 function isBmtcTicket(rawText: string): boolean {
-  return /\b(bmtc|bmrtc|bangalore metropolitan|ordinary\s+kas|kas\d|depot)\b/i.test(rawText);
+  return hasBmtcSignal(rawText);
 }
 
 function findBmtcFareTotal(rawText: string): number {

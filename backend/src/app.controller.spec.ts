@@ -100,6 +100,34 @@ describe('AppController', () => {
       expect(result.travel.destination).toBe('Whitefield (Vydehi Hospital)');
       expect(result.totals.total).toBe(18);
     });
+
+    it('classifies BMTC Silk Board to Kadubeesanahalli ticket as bus ticket, not receipt', () => {
+      const rawText = [
+        'BMTC',
+        'Depat-28',
+        'T No: 189',
+        '31-03-2026 11:58:00',
+        'Central Silk Board /Towards Marathahalli',
+        'TO',
+        'Kadubeesanahalli',
+        'Ad: 1x Rs.33.33 = Rs.33.33',
+        'Fare + GST +1.67',
+        'Total: Rs.35.00 (UPI)',
+        'Vajra KA57F1278 Tkn No: 16644',
+      ].join('\n');
+
+      const result = enrichReceiptData({
+        document: { type: 'receipt', transaction_type: 'purchase', transport_type: '' },
+      }, rawText);
+
+      expect(result.document.type).toBe('ticket');
+      expect(result.document.transport_type).toBe('bus');
+      expect(result.travel.pickup_point).toBe('Silk Board');
+      expect(result.travel.destination).toBe('Kadubeesanahalli');
+      expect(result.totals.total).toBe(35);
+      expect(result.payment.method).toBe('UPI');
+      expect(result.payment.amount).toBe(35);
+    });
   });
 
   describe('product table parsing', () => {
