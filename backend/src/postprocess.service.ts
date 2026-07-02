@@ -627,7 +627,15 @@ function extractTrainPlacesFromHeaderRows(rawText: string): { pickup: string; de
   for (let index = 0; index < lines.length - 1; index++) {
     const header = lines[index];
 
-    if (!/\bbooked\s+from\b/i.test(header) || !/\bboarding(?:\s+at|\s+point)?\b/i.test(header) || !/\bto\b/i.test(header)) {
+    const hasBookedBoardingTo =
+      /\bbooked\s+from\b/i.test(header) &&
+      /\bboarding(?:\s+at|\s+point)?\b/i.test(header) &&
+      /\bto\b/i.test(header);
+    const hasBoardingFromTo =
+      /\bboarding\s+from\b/i.test(header) &&
+      /\bto\b/i.test(header);
+
+    if (!hasBookedBoardingTo && !hasBoardingFromTo) {
       continue;
     }
 
@@ -649,6 +657,13 @@ function extractTrainPlacesFromHeaderRows(rawText: string): { pickup: string; de
         };
       }
 
+      if (hasBoardingFromTo && parts.length >= 2) {
+        return {
+          pickup: parts[0],
+          destination: parts[parts.length - 1],
+        };
+      }
+
       const stationMatches = [...valueLine.matchAll(/\b[A-Z][A-Z .'-]{2,}?\s*(?:-\s*[A-Z0-9]{2,6}|\([A-Z0-9]{2,6}\))/g)]
         .map((match) => normalizeTrainStationValue(match[0]))
         .filter(Boolean);
@@ -657,6 +672,13 @@ function extractTrainPlacesFromHeaderRows(rawText: string): { pickup: string; de
         return {
           pickup: stationMatches[1],
           destination: stationMatches[2],
+        };
+      }
+
+      if (hasBoardingFromTo && stationMatches.length >= 2) {
+        return {
+          pickup: stationMatches[0],
+          destination: stationMatches[stationMatches.length - 1],
         };
       }
     }
