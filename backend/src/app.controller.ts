@@ -244,10 +244,7 @@ export class AppController {
           totalConfidence += result.confidence || 0;
         }
 
-        rawText = this.normalizeOcrText(combinedText.trim());
-        if (this.hasBmtcOcrSignals(rawText)) {
-          rawText = this.stripNonEnglishOnlyLines(rawText);
-        }
+        rawText = this.normalizeOcrText(combinedText);
         averageConfidence = imagePaths.length > 0 ? totalConfidence / imagePaths.length : 0;
       }
 
@@ -728,22 +725,7 @@ export class AppController {
   }
 
   private normalizeOcrText(text: string): string {
-    return String(text || '')
-      .replace(/\r/g, '\n')
-      .replace(/[“”]/g, '"')
-      .replace(/[‘’]/g, "'")
-      .replace(/[|]/g, 'I')
-      .replace(/\bTOTAI\b/gi, 'TOTAL')
-      .replace(/\bSUBTOTAI\b/gi, 'SUBTOTAL')
-      .replace(/\bVlSA\b/g, 'VISA')
-      .replace(/\bUP1\b/g, 'UPI')
-      .replace(/([A-Za-z])\s{2,}([A-Za-z])/g, '$1 $2')
-      .replace(/[ \t]{2,}/g, ' ')
-      .split('\n')
-      .map((line) => line.trim())
-      .filter((line, index, lines) => line || (index > 0 && lines[index - 1]))
-      .join('\n')
-      .trim();
+    return String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   }
 
   private hasBmtcOcrSignals(text: string): boolean {
@@ -1155,3 +1137,4 @@ export class AppController {
     return String(value ?? '').replace(/[\\()]/g, '\\$&');
   }
 }
+
