@@ -189,6 +189,24 @@ describe('AppController', () => {
       });
     });
 
+    it('uses the readable place above FARE as BMTC destination', () => {
+      const rawText = [
+        'BMTC',
+        'Depot-28',
+        'Central Silk Board /Towards Marathahalli',
+        'TO',
+        'ಕೆಲವು ಕನ್ನಡ ಸಾಲು',
+        'Kadubeesanahalli',
+        'Fare + GST',
+        'Total: Rs.35.00 (UPI)',
+      ].join('\n');
+
+      expect(extractTravelStopsFromOCR(rawText)).toEqual({
+        pickup_point: 'Central Silk Board',
+        destination: 'Kadubeesanahalli',
+      });
+    });
+
     it('skips noisy OCR between TO and the real English destination', () => {
       const rawText = [
         'Depot-29',

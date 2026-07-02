@@ -71,7 +71,7 @@ function extractStopsAroundTo(rawText: string): { pickup_point: string; destinat
 
   for (const toIndex of toIndexes) {
     const pickup = findAdjacentTravelPlace(lines, toIndex - 1, -1);
-    const destination = findAdjacentTravelPlace(lines, toIndex + 1, 1);
+    const destination = findDestinationAboveFare(lines) || findAdjacentTravelPlace(lines, toIndex + 1, 1);
 
     if (pickup || destination) {
       return { pickup_point: pickup, destination };
@@ -97,6 +97,13 @@ function findAdjacentTravelPlace(lines: string[], startIndex: number, direction:
   }
 
   return '';
+}
+
+function findDestinationAboveFare(lines: string[]): string {
+  const fareIndex = lines.findIndex((line) => /\bfare\b/i.test(cleanPlaceName(line)));
+  if (fareIndex <= 0) return '';
+
+  return findAdjacentTravelPlace(lines, fareIndex - 1, -1);
 }
 
 function extractEnglishPlaceFromLine(line: string): string {
