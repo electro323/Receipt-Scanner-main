@@ -172,6 +172,23 @@ describe('AppController', () => {
       expect(result.payment.method).toBe('Cash');
     });
 
+    it('uses the second readable line below TO when the first below line is Kannada', () => {
+      const rawText = [
+        'BMTC',
+        'Depot-51',
+        'Kundalahalli Gate',
+        'TO',
+        'ವೈಟ್ ಫೀಲ್ಡ್ ಟಿಟಿಎಂಸಿ',
+        'White Field TTMC (Vydehi Hospital)',
+        'Total: Rs.18.00 (UPI)',
+      ].join('\n');
+
+      expect(extractTravelStopsFromOCR(rawText)).toEqual({
+        pickup_point: 'Kundalahalli Gate',
+        destination: 'White Field TTMC (Vydehi Hospital)',
+      });
+    });
+
     it('skips noisy OCR between TO and the real English destination', () => {
       const rawText = [
         'Depot-29',
@@ -189,7 +206,7 @@ describe('AppController', () => {
 
       const result = enrichReceiptData({}, rawText);
 
-      expect(result.travel.pickup_point).toBe('Ragigudda Temple');
+      expect(result.travel.pickup_point).toBe('Ragigudda Templo');
       expect(result.travel.destination).toBe('Depot-25 Gate (Towards Hebbdla)');
       expect(result.totals.total).toBe(15);
       expect(result.payment.amount).toBe(15);
@@ -212,7 +229,7 @@ describe('AppController', () => {
       expect(result.document.type).toBe('ticket');
       expect(result.document.transport_type).toBe('bus');
       expect(result.travel.pickup_point).toBe('Kundalahalli Gate');
-      expect(result.travel.destination).toBe('Whitefield (Vydehi Hospital)');
+      expect(result.travel.destination).toBe('Whitefield TTMC (Vydehi Hospital)');
       expect(result.totals.total).toBe(18);
     });
 
@@ -237,7 +254,7 @@ describe('AppController', () => {
 
       expect(result.document.type).toBe('ticket');
       expect(result.document.transport_type).toBe('bus');
-      expect(result.travel.pickup_point).toBe('Silk Board');
+      expect(result.travel.pickup_point).toBe('Central Silk Board');
       expect(result.travel.destination).toBe('Kadubeesanahalli');
       expect(result.totals.total).toBe(35);
       expect(result.payment.method).toBe('UPI');
@@ -260,7 +277,7 @@ describe('AppController', () => {
       expect(result.document.type).toBe('ticket');
       expect(result.document.transport_type).toBe('bus');
       expect(result.travel.pickup_point).toBe('Kundalahalli Gate');
-      expect(result.travel.destination).toBe('Whitefield');
+      expect(result.travel.destination).toBe('White Field TTMC');
       expect(result.travel.destination).not.toBe('Depot-25 Gate (Towards Hebbala)');
     });
 
@@ -280,7 +297,7 @@ describe('AppController', () => {
       const result = enrichReceiptData({}, rawText);
 
       expect(result.travel.pickup_point).toBe('Kundalahalli Gate');
-      expect(result.travel.destination).toBe('Whitefield');
+      expect(result.travel.destination).toBe('White Field TTMC');
     });
 
     it('replaces noisy AI BMTC route fields with the route around TO', () => {
@@ -309,8 +326,8 @@ describe('AppController', () => {
       }, rawText);
 
       expect(result.travel.pickup_point).toBe('Kundalahalli Gate');
-      expect(result.travel.destination).toBe('Whitefield (Vydehi Hospital)');
-      expect(result.travel.route).toBe('Kundalahalli Gate to Whitefield (Vydehi Hospital)');
+      expect(result.travel.destination).toBe('White Field TTMC (Vydehi Hospital)');
+      expect(result.travel.route).toBe('Kundalahalli Gate to White Field TTMC (Vydehi Hospital)');
       expect(result.travel.ticket_number).toBe('16131');
       expect(result.totals.total).toBe(18);
       expect(result.payment.amount).toBe(18);
