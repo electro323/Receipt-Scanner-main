@@ -108,6 +108,10 @@ export async function preprocessImage(
   inputPath: string,
   mode: PreprocessMode = 'balanced',
 ): Promise<string[]> {
+  // Temporarily bypass color/contrast/threshold preprocessing to compare OCR on the original image.
+  void mode;
+  return [inputPath];
+
   const resizeWidth = mode === 'fast' ? 1650 : mode === 'strong' ? 2200 : 1900;
   const normalizedBase = sharp(inputPath)
     .rotate()
