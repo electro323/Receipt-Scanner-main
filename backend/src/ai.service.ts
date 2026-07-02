@@ -1,15 +1,13 @@
 export async function processReceiptWithAI(rawText: string) {
-  const ocrText = String(rawText || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  let ocrForPrompt = ocrText;
-  if (ocrForPrompt.length > 4500) {
-    const clipped = ocrForPrompt.slice(0, 4500);
-    const lastLineBreak = clipped.lastIndexOf('\n');
-    ocrForPrompt = lastLineBreak > 3000 ? clipped.slice(0, lastLineBreak) : clipped;
-  }
+  const cleanText = rawText
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 1)
+    .join('\n');
+  const ocrForPrompt = cleanText.length > 4500 ? cleanText.slice(0, 4500) : cleanText;
 
   const prompt = [
     'Return ONLY valid JSON. No markdown. No explanation.',
-    'The OCR block is line-sensitive. Preserve OCR line breaks and ordering exactly when reasoning about layout. Do not convert OCR into a single paragraph.',
     'The OCR may be English, Kannada, Malayalam, or Hindi. Translate labels and names to English where useful, but preserve all numbers, dates, ticket numbers, receipt numbers, routes, card suffixes, and currency exactly.',
     'Final JSON values must be English/ASCII text only. Do not output Kannada, Malayalam, Hindi, or other non-English scripts. If a value cannot be translated, leave it empty or keep only English/numeric parts.',
     'First classify the document into exactly one of these:',
@@ -142,7 +140,7 @@ export async function processReceiptWithAI(rawText: string) {
     throw new Error('AI returned broken JSON');
   }
 
-  parsed.raw_text = ocrText;
+  parsed.raw_text = cleanText;
 
   return JSON.stringify(parsed);
 }
