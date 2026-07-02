@@ -10,98 +10,6 @@ function asNumber(value: any): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-const BMTC_PLACE_NAMES = [
-  'Majestic',
-  'Kempegowda Bus Station',
-  'Shivajinagar',
-  'KR Market',
-  'Town Hall',
-  'Corporation',
-  'Richmond Circle',
-  'MG Road',
-  'Brigade Road',
-  'Trinity',
-  'Mayo Hall',
-  'Cubbon Park',
-  'Vidhana Soudha',
-  'Lalbagh Main Gate',
-  'Wilson Garden',
-  'NIMHANS',
-  'Dairy Circle',
-  'Jayadeva Hospital',
-  'Ragigudda Temple',
-  'MICO Layout',
-  'BTM Layout',
-  'BTM Water Tank',
-  'Silk Board',
-  'Bommanahalli',
-  'JP Nagar',
-  'Banashankari',
-  'Banashankari TTMC',
-  'Jayanagar 4th Block',
-  'Jayanagar 9th Block',
-  'Bannerghatta Road',
-  'Arekere',
-  'Hulimavu',
-  'Electronic City',
-  'Wipro Gate',
-  'Infosys Gate',
-  'Koramangala',
-  'Domlur',
-  'Indiranagar',
-  'HAL Main Gate',
-  'Murugeshpalya',
-  'Marathahalli Bridge',
-  'Marathahalli',
-  'Kundalahalli Gate',
-  'Kundalahalli Colony',
-  'BEML Layout',
-  'Brookefield',
-  'ITPL',
-  'Whitefield',
-  'Whitefield TTMC',
-  'Whitefield (Vydehi Hospital)',
-  'Hope Farm',
-  'Kadugodi',
-  'Hoodi',
-  'Mahadevapura',
-  'Tin Factory',
-  'KR Puram',
-  'Baiyappanahalli',
-  'Bellandur',
-  'Eco Space',
-  'Eco World',
-  'Kadubeesanahalli',
-  'Embassy Tech Village',
-  'Manyata Tech Park',
-  'Hebbal',
-  'Nagawara',
-  'Hennur Cross',
-  'Thanisandra',
-  'Yeshwanthpur',
-  'Rajajinagar',
-  'Malleshwaram',
-  'Peenya',
-  'BEL Circle',
-  'Jalahalli',
-  'Yelahanka',
-  'Mekhri Circle',
-  'Vijayanagar',
-  'Attiguppe',
-  'Nagarbhavi',
-  'Kengeri',
-  'Mysore Road Bus Station',
-  'Magadi Road',
-  'Chandra Layout',
-  'Basavanagudi',
-  'Gandhi Bazaar',
-  'Chamarajpet',
-  'Austin Town',
-  'Shantinagar',
-  'Cantonment Railway Station',
-  'KSR Bengaluru Railway Station',
-];
-
 function hasTravelTicketSignals(rawText: string): boolean {
   const lines = rawText
     .split(/\r?\n/)
@@ -115,7 +23,7 @@ function hasTravelTicketSignals(rawText: string): boolean {
   const hasFareAmount = /(?:fare|total|amount|ad)\s*[;:=\- ]*\s*(?:1x)?\s*(?:Rs\.?|INR|\u20B9)\s*\d+/i.test(rawText);
   const hasTicketNumber = /\b(?:ticket|pnr|booking|ordinary|trip|journey|train)\b\s*[:#-]?\s*[A-Z0-9][A-Z0-9\/-]{2,}/i.test(rawText);
   const hasTransportWord = /\b(bus|ksrtc|bmtc|bmrtc|ordinary|passanger|passenger|route|pickup|destination|departure|arrival|boarding|pnr|irctc|railway|train|from|fare|journey|ticket|depot|dept)\b/i.test(rawText);
-  const hasRoutePlaces = hasStandaloneTo && lines.some((line) => /gate|field|hospital|stand|station|terminal|stop|road|circle|cross|depot|dept|market|silk|kadubeesanahalli|marathahalli/.test(line));
+  const hasRoutePlaces = hasStandaloneTo && lines.some((line) => /gate|field|hospital|stand|station|terminal|stop|road|circle|cross|depot|dept|market|temple|layout|ttmc/.test(line));
 
   const score = [hasStandaloneTo, hasFareAmount, hasTicketNumber, hasTransportWord, hasRoutePlaces, hasDepot, hasBmtc, hasHardTravelWord]
     .filter(Boolean)
@@ -391,82 +299,8 @@ function findBmtcFareTotal(rawText: string): number {
   return normalizeBmtcFareAmount(value, rawText);
 }
 
-function normalizePlaceForMatch(value: string): string {
-  return cleanEnglishText(value)
-    .toLowerCase()
-    .replace(/\b(central|towards|toward|ttmc|bus|station|main)\b/g, ' ')
-    .replace(/hebbala/g, 'hebbal')
-    .replace(/vydehi|vydeh/i, 'vydehi')
-    .replace(/flospital|hspital|hospitali/g, 'hospital')
-    .replace(/figld|fieid|feild/g, 'field')
-    .replace(/silkboard/g, 'silk board')
-    .replace(/white\s*field/g, 'whitefield')
-    .replace(/[^a-z0-9]+/g, '')
-    .trim();
-}
-
-function editDistance(a: string, b: string): number {
-  if (a === b) return 0;
-  if (!a) return b.length;
-  if (!b) return a.length;
-
-  const previous = Array.from({ length: b.length + 1 }, (_, index) => index);
-
-  for (let i = 1; i <= a.length; i++) {
-    let lastDiagonal = previous[0];
-    previous[0] = i;
-
-    for (let j = 1; j <= b.length; j++) {
-      const oldDiagonal = previous[j];
-      previous[j] = Math.min(
-        previous[j] + 1,
-        previous[j - 1] + 1,
-        lastDiagonal + (a[i - 1] === b[j - 1] ? 0 : 1),
-      );
-      lastDiagonal = oldDiagonal;
-    }
-  }
-
-  return previous[b.length];
-}
-
 function canonicalizeBmtcPlace(value: string): string {
-  const cleaned = cleanPlaceName(value);
-  const normalized = normalizePlaceForMatch(cleaned);
-
-  if (!normalized || normalized.length < 4) return cleaned;
-
-  if (/\bdepot\s*[- ]?\s*\d+\b/i.test(cleaned)) {
-    return cleaned.replace(/\s+\(/g, ' (').trim();
-  }
-
-  if (/vydehi|hospital/.test(normalized) && /whitefield|field/.test(normalized)) {
-    return 'Whitefield (Vydehi Hospital)';
-  }
-
-  if (/hebbal/.test(normalized)) return 'Hebbal';
-  if (/silkboard/.test(normalized)) return 'Silk Board';
-
-  let best = '';
-  let bestDistance = Number.MAX_SAFE_INTEGER;
-
-  for (const place of BMTC_PLACE_NAMES) {
-    const placeNormalized = normalizePlaceForMatch(place);
-    if (!placeNormalized) continue;
-
-    if (normalized.includes(placeNormalized) || placeNormalized.includes(normalized)) {
-      return place;
-    }
-
-    const distance = editDistance(normalized, placeNormalized);
-    const threshold = Math.max(2, Math.floor(placeNormalized.length * 0.22));
-    if (distance <= threshold && distance < bestDistance) {
-      best = place;
-      bestDistance = distance;
-    }
-  }
-
-  return best || cleaned;
+  return cleanPlaceName(value).replace(/\s+\(/g, ' (').trim();
 }
 
 function isRouteNoiseLine(value: string): boolean {
@@ -488,6 +322,7 @@ function isDepotOnlyLine(value: string): boolean {
 function cleanPlaceName(value: string): string {
   return value
     .replace(/[^A-Za-z0-9 .,&()/-]/g, ' ')
+    .replace(/\s*\/\s*towards\b.*$/i, '')
     .replace(/\b(Res|Ad|Total|Ordinary|UPI|Cash|Card|No)\b.*$/i, '')
     .replace(/\s+/g, ' ')
     .trim();
@@ -557,10 +392,11 @@ function isRoutePlaceLine(line: string): boolean {
 
 function bmtcPlaceConfidence(line: string): number {
   const cleaned = cleanPlaceName(line);
-  const normalized = normalizePlaceForMatch(cleaned);
   const alpha = cleaned.replace(/[^A-Za-z]/g, '');
   const symbolCount = (cleaned.match(/[.,'"`~!@#$%^*_+=|\\<>?]/g) || []).length;
   const digitCount = (cleaned.match(/\d/g) || []).length;
+  const words = cleaned.match(/[A-Za-z]{3,}/g) || [];
+  const hasGenericPlaceWord = /\b(gate|temple|field|hospital|stand|station|terminal|stop|road|circle|cross|market|junction|bridge|hall|layout|ttmc|depot)\b/i.test(cleaned);
   let score = 0;
 
   if (!alpha || alpha.length < 4) return 0;
@@ -568,14 +404,11 @@ function bmtcPlaceConfidence(line: string): number {
   if (digitCount >= 3 && !/\bdepot\s*[- ]?\d+\b/i.test(cleaned)) score -= 3;
   if (/[A-Z][a-z]{2,}/.test(cleaned)) score += 2;
   if (/[A-Za-z]{3,}\s+[A-Za-z]{3,}/.test(cleaned)) score += 3;
-  if (/\b(depot|gate|towards|temple|field|hospital|stand|station|terminal|stop|road|circle|cross|market|junction|bridge|hall)\b/i.test(cleaned)) score += 5;
-
-  for (const place of BMTC_PLACE_NAMES) {
-    const placeNormalized = normalizePlaceForMatch(place);
-    if (!placeNormalized) continue;
-    if (normalized.includes(placeNormalized) || placeNormalized.includes(normalized)) score += 8;
-    else if (editDistance(normalized, placeNormalized) <= Math.max(2, Math.floor(placeNormalized.length * 0.22))) score += 6;
-  }
+  if (hasGenericPlaceWord) score += 5;
+  if (words.length === 1 && alpha.length >= 7 && digitCount === 0) score += 3;
+  if (words.length >= 2 && digitCount === 0) score += 2;
+  if (words.length > 3 && !hasGenericPlaceWord) score -= 2;
+  if (digitCount > 0 && !hasGenericPlaceWord) score -= 3;
 
   return score;
 }
@@ -841,11 +674,14 @@ function inferTicketTravel(rawText: string, travel: any) {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
+  const isBmtc = isBmtcTicket(rawText);
   const cleanedLines = rawLines.map((line) => cleanPlaceName(line));
   const routeAroundTo = extractRouteAroundTo(rawLines);
 
-  travel.pickup_point ||= extractLabeledPlace(rawText, ['from', 'source', 'pickup', 'pickup point', 'boarding', 'start']);
-  travel.destination ||= extractLabeledPlace(rawText, ['to', 'destination', 'drop', 'drop point', 'alighting', 'end']);
+  if (!isBmtc) {
+    travel.pickup_point ||= extractLabeledPlace(rawText, ['from', 'source', 'pickup', 'pickup point', 'boarding', 'start']);
+    travel.destination ||= extractLabeledPlace(rawText, ['to', 'destination', 'drop', 'drop point', 'alighting', 'end']);
+  }
 
   if (routeAroundTo.pickup && routeAroundTo.destination) {
     travel.pickup_point = routeAroundTo.pickup;
@@ -854,7 +690,7 @@ function inferTicketTravel(rawText: string, travel: any) {
 
   const toIndex = cleanedLines.findIndex((line) => /^to$/i.test(line) || /^to\b/i.test(line));
 
-  if (toIndex > 0 && !travel.pickup_point) {
+  if (!isBmtc && toIndex > 0 && !travel.pickup_point) {
     for (let index = toIndex - 1; index >= 0; index--) {
       if (isUsefulPlaceLine(rawLines[index])) {
         travel.pickup_point = canonicalizeBmtcPlace(rawLines[index]);
@@ -863,7 +699,7 @@ function inferTicketTravel(rawText: string, travel: any) {
     }
   }
 
-  if (toIndex >= 0 && !travel.destination) {
+  if (!isBmtc && toIndex >= 0 && !travel.destination) {
     for (let index = toIndex + 1; index < rawLines.length; index++) {
       if (isUsefulPlaceLine(rawLines[index])) {
         travel.destination = canonicalizeBmtcPlace(rawLines[index]);
@@ -876,7 +712,7 @@ function inferTicketTravel(rawText: string, travel: any) {
     .map((line, index) => ({ index, value: canonicalizeBmtcPlace(line) }))
     .filter((line) => isUsefulPlaceLine(line.value));
 
-  if ((!travel.pickup_point || !travel.destination) && usefulPlaces.length >= 2) {
+  if (!isBmtc && (!travel.pickup_point || !travel.destination) && usefulPlaces.length >= 2) {
     const fareIndex = rawLines.findIndex((line) => /(?:fare|total|amount|rs\.?|\u20B9|upi|ordinary|ticket|no\s*:)/i.test(line));
     const beforeFare = fareIndex >= 0 ? usefulPlaces.filter((line) => line.index < fareIndex) : usefulPlaces;
     const candidates = beforeFare.length >= 2 ? beforeFare : usefulPlaces;
