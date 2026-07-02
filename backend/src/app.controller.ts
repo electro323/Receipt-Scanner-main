@@ -23,7 +23,7 @@ import { createHash } from 'crypto';
 
 import { ReceiptService } from './receipts/receipt.service';
 import { processReceiptWithAI } from './ai.service';
-import { enrichReceiptData } from './postprocess.service';
+import { enrichReceiptData, extractTravelStopsFromOCR } from './postprocess.service';
 import { analyzeImageQuality, preprocessImage } from './image-preprocess.service';
 import {
   ensureHeicJpegPreview,
@@ -187,6 +187,7 @@ export class AppController {
     try {
       let rawText = '';
       let averageConfidence = 0;
+      let extractedTravelStops = { pickup_point: '', destination: '' };
 
       if (file.originalname.toLowerCase().endsWith('.pdf')) {
         try {
@@ -194,6 +195,7 @@ export class AppController {
 
           if (pdfText && pdfText.trim().length > 20) {
             rawText = pdfText.trim();
+            extractedTravelStops = extractTravelStopsFromOCR(pdfText);
             averageConfidence = 100;
           }
         } catch (error) {
@@ -244,6 +246,7 @@ export class AppController {
           totalConfidence += result.confidence || 0;
         }
 
+        extractedTravelStops = extractTravelStopsFromOCR(combinedText);
         rawText = this.normalizeOcrText(combinedText.trim());
         if (this.hasBmtcOcrSignals(rawText)) {
           rawText = this.stripNonEnglishOnlyLines(rawText);
@@ -283,6 +286,7 @@ export class AppController {
         console.error('AI structuring failed. Saving OCR fallback JSON:', aiError);
         finalData = enrichReceiptData({}, rawText);
       }
+      finalData = this.applyExtractedTravelStops(finalData, extractedTravelStops);
 
       await this.receiptService.saveAIResult(transactionId, finalData);
       console.log('Final receipt JSON saved for transaction:', transactionId);
@@ -301,13 +305,30 @@ export class AppController {
   async processAI(@Body() body: any) {
     const aiResponse = await processReceiptWithAI(body.rawText || '');
     const structuredData = JSON.parse(aiResponse);
-    const finalData = enrichReceiptData(structuredData, body.rawText || '');
+    const finalData = this.applyExtractedTravelStops(
+      enrichReceiptData(structuredData, body.rawText || ''),
+      extractTravelStopsFromOCR(body.rawText || ''),
+    );
 
     if (body.transactionId) {
       await this.receiptService.saveAIResult(body.transactionId, finalData);
     }
 
     return finalData;
+  }
+
+  private applyExtractedTravelStops(data: any, stops: { pickup_point: string; destination: string }) {
+    if (data?.document?.type !== 'ticket') return data;
+
+    data.travel ??= {};
+    if (stops.pickup_point) data.travel.pickup_point = stops.pickup_point;
+    if (stops.destination) data.travel.destination = stops.destination;
+
+    if (data.travel.pickup_point && data.travel.destination) {
+      data.travel.route = data.travel.pickup_point + ' to ' + data.travel.destination;
+    }
+
+    return data;
   }
 
   @Put(['receipt/:transactionId', 'receipts/:transactionId'])

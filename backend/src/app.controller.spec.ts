@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AppController } from './app.controller';
 import { ReceiptService } from './receipts/receipt.service';
-import { enrichReceiptData } from './postprocess.service';
+import { enrichReceiptData, extractTravelStopsFromOCR } from './postprocess.service';
 
 describe('AppController', () => {
   let appController: AppController;
@@ -114,6 +114,41 @@ describe('AppController', () => {
   });
 
   describe('BMTC route parsing', () => {
+    it('extracts generic travel stops around standalone TO without stop-name rules', () => {
+      const rawText = [
+        'BMTC',
+        'Depot-29',
+        'T No: 180',
+        'Green Garden Avenue',
+        'TO',
+        'North Lake Terminal',
+        'Total: Rs.15.00 (CASH)',
+      ].join('\n');
+
+      expect(extractTravelStopsFromOCR(rawText)).toEqual({
+        pickup_point: 'Green Garden Avenue',
+        destination: 'North Lake Terminal',
+      });
+    });
+
+    it('ignores metadata and numeric lines when extracting generic travel stops', () => {
+      const rawText = [
+        'Depot-29',
+        'T No: 180',
+        '14-04-2024',
+        'Ragigudda Temple',
+        'TO',
+        'J vadoes ded 8 2',
+        'Depot-25 Gate',
+        'Total: Rs.15.00 (CASH)',
+      ].join('\n');
+
+      expect(extractTravelStopsFromOCR(rawText)).toEqual({
+        pickup_point: 'Ragigudda Temple',
+        destination: '',
+      });
+    });
+
     it('uses the English place above and below TO while skipping Kannada lines', () => {
       const rawText = [
         'Depot-29',

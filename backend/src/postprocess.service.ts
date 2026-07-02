@@ -145,6 +145,58 @@ function hasPurchaseReceiptSignals(rawText: string): boolean {
   return /\b(pizza|food|restaurant|health|paracetamol|antibiotic|pharmacy|medical|grocery|super\s*market|supermarket|mart|store|fresh|retail|invoice|receipt|cash\s*memo|tax\s*invoice|subtotal|gst|cgst|sgst|mrp)\b/i.test(rawText);
 }
 
+export function extractTravelStopsFromOCR(rawText: string): { pickup_point: string; destination: string } {
+  const lines = String(rawText || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const centerIndex = (lines.length - 1) / 2;
+  const toIndexes = lines
+    .map((line, index) => ({ line, index }))
+    .filter(({ line }) => isRouteSeparator(line))
+    .map(({ index }) => index)
+    .sort((left, right) => {
+      const distance = Math.abs(left - centerIndex) - Math.abs(right - centerIndex);
+      return distance || right - left;
+    });
+
+  const findPlace = (startIndex: number, direction: -1 | 1) => {
+    for (let index = startIndex; index >= 0 && index < lines.length; index += direction) {
+      if (isGenericTravelPlaceLine(lines[index])) return cleanPlaceName(lines[index]);
+    }
+
+    return '';
+  };
+
+  for (const toIndex of toIndexes) {
+    const pickup = findPlace(toIndex - 1, -1);
+    const destination = findPlace(toIndex + 1, 1);
+
+    if (pickup || destination) {
+      return { pickup_point: pickup, destination };
+    }
+  }
+
+  return { pickup_point: '', destination: '' };
+}
+
+function isGenericTravelPlaceLine(line: string): boolean {
+  const cleaned = cleanPlaceName(line);
+  const letters = cleaned.replace(/[^A-Za-z]/g, '');
+  const symbols = cleaned.replace(/[A-Za-z\s().,&/-]/g, '');
+
+  return (
+    /[A-Za-z]{3,}/.test(cleaned) &&
+    !/\d/.test(cleaned) &&
+    !/^\W*$/.test(cleaned) &&
+    symbols.length <= Math.max(1, cleaned.length * 0.2) &&
+    !/\b(rs|total|ticket|depot|route|bus|fare|upi|no|tax|amount|cash|card|bmtc|bmrtc|ordinary|tkn|date|time|phone|mobile|gst|ad)\b/i.test(cleaned) &&
+    letters.length >= 4
+  );
+}
+
 function detectDocumentKind(data: any, rawText: string): 'purchase' | 'ticket' | 'refund' | 'fuel' {
   const text = rawText.toLowerCase();
   const doc = data?.document || {};
