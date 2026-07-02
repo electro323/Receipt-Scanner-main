@@ -410,6 +410,29 @@ describe('AppController', () => {
       expect(result.travel.PNR).toBe('6323884790');
       expect(result.travel.class).toBe('3A');
     });
+
+    it('uses station below BOARDING and station above Arrival in the top train header', () => {
+      const rawText = [
+        'IRCTC',
+        'BOARDING',
+        'HOWRAH JN (HWH)                    BHUBANESWAR (BBS)',
+        'Departure 23:55 14-Aug-2023        Arrival 06:20 15-Aug-2023',
+        'PNR 6323884790',
+        'Train No./Name 12839 / CHENNAI MAIL',
+        'Class THIRD AC (3A)',
+        'Passenger Details',
+        'Booking Status Current Status',
+      ].join('\n');
+
+      const result = enrichReceiptData({}, rawText);
+
+      expect(result.document.type).toBe('ticket');
+      expect(result.document.transport_type).toBe('train');
+      expect(result.travel.pickup_point).toBe('HOWRAH JN (HWH)');
+      expect(result.travel.destination).toBe('BHUBANESWAR (BBS)');
+      expect(result.travel.PNR).toBe('6323884790');
+      expect(result.travel.class).toBe('3A');
+    });
   });
 
   describe('product table parsing', () => {

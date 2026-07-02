@@ -624,7 +624,9 @@ function extractTrainPlacesFromHeaderRows(rawText: string): { pickup: string; de
     .map((line) => line.trim())
     .filter(Boolean);
 
-  for (let index = 0; index < lines.length - 1; index++) {
+  const topLimit = Math.min(lines.length - 1, 12);
+
+  for (let index = 0; index < topLimit; index++) {
     const header = lines[index];
 
     const hasBookedBoardingTo =
@@ -634,8 +636,11 @@ function extractTrainPlacesFromHeaderRows(rawText: string): { pickup: string; de
     const hasBoardingFromTo =
       /\bboarding\s+from\b/i.test(header) &&
       /\bto\b/i.test(header);
+    const hasBoardingArrivalLayout =
+      /\bboarding\b/i.test(header) &&
+      lines.slice(index, Math.min(lines.length, index + 5)).some((line) => /\barrival\b/i.test(line));
 
-    if (!hasBookedBoardingTo && !hasBoardingFromTo) {
+    if (!hasBookedBoardingTo && !hasBoardingFromTo && !hasBoardingArrivalLayout) {
       continue;
     }
 
@@ -657,7 +662,7 @@ function extractTrainPlacesFromHeaderRows(rawText: string): { pickup: string; de
         };
       }
 
-      if (hasBoardingFromTo && parts.length >= 2) {
+      if ((hasBoardingFromTo || hasBoardingArrivalLayout) && parts.length >= 2) {
         return {
           pickup: parts[0],
           destination: parts[parts.length - 1],
@@ -675,7 +680,7 @@ function extractTrainPlacesFromHeaderRows(rawText: string): { pickup: string; de
         };
       }
 
-      if (hasBoardingFromTo && stationMatches.length >= 2) {
+      if ((hasBoardingFromTo || hasBoardingArrivalLayout) && stationMatches.length >= 2) {
         return {
           pickup: stationMatches[0],
           destination: stationMatches[stationMatches.length - 1],
