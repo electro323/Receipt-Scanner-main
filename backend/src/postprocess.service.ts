@@ -38,7 +38,12 @@ function hasDepotSignal(rawText: string): boolean {
 
 function hasBmtcSignal(rawText: string): boolean {
   return /\b(?:bmtc|bmrtc|bmtc\b|bangalore metropolitan|ordinary\s+kas|kas\d)\b/i.test(rawText)
-    || hasDepotSignal(rawText);
+    || hasDepotSignal(rawText)
+    || hasBmtcStopSignal(rawText);
+}
+
+function hasBmtcStopSignal(rawText: string): boolean {
+  return /\bkundalahalli\s+gate\b/i.test(rawText);
 }
 
 function hasFuelBillSignals(rawText: string): boolean {

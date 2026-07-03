@@ -964,7 +964,8 @@ export class AppController {
     const text = rawText.replace(/\s+/g, ' ').trim();
     const words = text.match(/[A-Za-z]{3,}|[\u0C80-\u0CFF]{2,}|[\u0D00-\u0D7F]{2,}|[\u0900-\u097F]{2,}/g) || [];
     const amountMatches = text.match(/(?:Rs\.?|INR|\u20B9|[$])?\s*[0-9]+(?:[,.][0-9]{1,2})?/gi) || [];
-    const hasBmtcDepotSignal = /\b(?:bmtc|bmrtc|depot|dep[o0a]t|dept)\s*[-:]?\s*\d*\b/i.test(text);
+    const hasBmtcDepotSignal = /\b(?:bmtc|bmrtc|depot|dep[o0a]t|dept)\s*[-:]?\s*\d*\b/i.test(text)
+      || /\bkundalahalli\s+gate\b/i.test(text);
     const hasNonBillDocumentSignal = /\b(curriculum\s+vitae|resume|professional\s+summary|work\s+experience|education|technical\s+skills|certifications?|portfolio|cover\s+letter|project\s+assignment|core\s+functional\s+requirements|project\s+deliverables|evaluation\s+criteria|milestones?|suggested\s+technology\s+stack|resources\s+to\s+get\s+started)\b/i.test(text);
     const billSignals = text.match(/\b(receipt|invoice|bill|store|total|subtotal|tax|gst|cgst|sgst|igst|amount|paid|balance|discount|qty|quantity|item|price|mrp|cash|card|upi|visa|refund|return|fare|ticket|pnr|depot|dept|departure|arrival|boarding|train|railway|irctc|pizza|food|restaurant|health|medical|pharmacy|paracetamol|antibiotic|petrol|diesel|fuel|pump|density|litre|liter|ltr)\b|\u20B9|Rs\.?/gi) || [];
     const identitySignals = text.match(/\b(receipt|invoice|bill|store|ticket|pnr|voucher|slip|gst|upi|cash|card|depot|dept|train|irctc|petrol|diesel|pharmacy|restaurant|bmtc|bmrtc)\b/gi) || [];

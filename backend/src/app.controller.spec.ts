@@ -83,6 +83,22 @@ describe('AppController', () => {
       expect(result.ok).toBe(true);
     });
 
+    it('accepts Kundalahalli Gate OCR text as a bus ticket signal', () => {
+      const bmtcText = [
+        'Kundalahalli Gate',
+        'TO',
+        'White Field TTMC',
+        'Total: Rs.18.00 (UPI)',
+      ].join('\n');
+
+      const result = (appController as any).validateReceiptLikeText(bmtcText, 18);
+      const enriched = enrichReceiptData({}, bmtcText);
+
+      expect(result.ok).toBe(true);
+      expect(enriched.document.type).toBe('ticket');
+      expect(enriched.document.transport_type).toBe('bus');
+    });
+
     it('accepts a real receipt-like text with totals and payment signals', () => {
       const receiptText = [
         'REDSTORE',
