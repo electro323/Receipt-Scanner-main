@@ -1195,6 +1195,11 @@ function normalizeTicket(data: any, rawText: string) {
   const issuer = data.issuer || data.vendor || {};
   const travel = data.travel || {};
   const transportType = detectTransportType(data, rawText) || 'bus';
+  const issuerName = transportType === 'train'
+    ? 'IRCTC'
+    : transportType === 'bus'
+      ? 'BMTC'
+      : issuer.name || '';
   travel.pickup_point = String(
     travel.pickup_point || travel.pickupPoint || travel.from || travel.source || travel.boarding || '',
   ).trim();
@@ -1233,7 +1238,7 @@ function normalizeTicket(data: any, rawText: string) {
 
   return {
     document: { type: 'ticket', transaction_type: 'purchase', transport_type: transportType },
-    issuer: { name: issuer.name || '', address: issuer.address || '', phone: issuer.phone || '' },
+    issuer: { name: issuerName, address: issuer.address || '', phone: issuer.phone || '' },
     travel,
     transaction: fillCommonTransaction(data.transaction || {}, rawText),
     totals: { subtotal: grossTotal, discounts, total },

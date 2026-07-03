@@ -165,6 +165,7 @@ describe('AppController', () => {
 
       expect(result.document.type).toBe('ticket');
       expect(result.document.transport_type).toBe('bus');
+      expect(result.issuer.name).toBe('BMTC');
       expect(result.travel.pickup_point).toBe('Ragigudda Temple');
       expect(result.travel.destination).toBe('Depot-25 Gate (Towards Hebbala)');
       expect(result.totals.total).toBe(15);
@@ -405,6 +406,7 @@ describe('AppController', () => {
 
       expect(result.document.type).toBe('ticket');
       expect(result.document.transport_type).toBe('train');
+      expect(result.issuer.name).toBe('IRCTC');
       expect(result.travel.pickup_point).toBe('HOWRAH JN (HWH)');
       expect(result.travel.destination).toBe('BHUBANESWAR (BBS)');
       expect(result.travel.PNR).toBe('6323884790');
