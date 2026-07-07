@@ -140,9 +140,9 @@ describe('AppController', () => {
         startedAt,
       );
 
-      expect(result.processing.duration_seconds).toBeGreaterThanOrEqual(2.3);
-      expect(result.processing.duration_seconds).toBeLessThanOrEqual(2.5);
-      expect(result.processing.duration_unit).toBe('s');
+      expect(result.processing.duration).toMatch(/^\d+\.\d{2} s$/);
+      expect(Number(result.processing.duration.replace(' s', ''))).toBeGreaterThanOrEqual(2.3);
+      expect(Number(result.processing.duration.replace(' s', ''))).toBeLessThanOrEqual(2.5);
     });
   });
 
