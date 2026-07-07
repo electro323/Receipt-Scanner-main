@@ -166,6 +166,34 @@ docker stats
 
 See `load-tests/README.md` for Dockerized k6 commands, custom user counts, PDF/PNG MIME examples, status polling, and the scalability report template.
 
+## Final Verification
+
+Final submission verification is recorded in `docs/final-verification.md`.
+
+Latest checked commands:
+
+```bash
+cd backend
+npm test -- --runInBand
+npm run test:e2e
+npm run build
+
+cd ../frontend
+npm run test.unit -- --run
+npm run build
+
+cd ..
+docker compose up --build -d
+```
+
+Latest verified URLs:
+
+```text
+http://localhost:8100
+http://localhost:3000/receipts
+http://localhost:3000/analytics/monthly
+```
+
 ### Verified Scalability Results
 
 The project was tested locally with Docker, MongoDB, NestJS backend, Ionic frontend, and k6.
