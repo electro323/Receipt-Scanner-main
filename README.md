@@ -170,6 +170,8 @@ See `load-tests/README.md` for Dockerized k6 commands, custom user counts, PDF/P
 
 Final submission verification is recorded in `docs/final-verification.md`.
 
+API accuracy, performance, and scalability answers are recorded in `docs/api-quality-performance-scalability.md`.
+
 Latest checked commands:
 
 ```bash

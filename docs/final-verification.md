@@ -8,7 +8,7 @@ This document records the final local verification before submission.
 
 | Area | Command | Result |
 | --- | --- | --- |
-| Backend unit/regression tests | `npm test -- --runInBand` in `backend` | Passed: 24 tests |
+| Backend unit/regression tests | `npm test -- --runInBand` in `backend` | Passed: 25 tests |
 | Backend e2e test | `npm run test:e2e` in `backend` | Passed: 1 test |
 | Backend production build | `npm run build` in `backend` | Passed |
 | Frontend unit test | `npm run test.unit -- --run` in `frontend` | Passed: 1 test |
@@ -41,3 +41,4 @@ Frontend build produced Vite chunk-size warnings. These are warnings only; the p
 - Ollama with `llama3.1` must be running locally for AI structuring.
 - Tesseract is installed inside the backend Docker image.
 - OCR quality still depends on input image quality. The app includes preprocessing, non-bill rejection, editable correction fields, and raw OCR output for audit/debugging.
+- API quality, performance, and scalability answers are documented in `docs/api-quality-performance-scalability.md`.
