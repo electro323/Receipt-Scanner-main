@@ -142,6 +142,7 @@ describe('AppController', () => {
 
       expect(result.processing.duration_seconds).toBeGreaterThanOrEqual(2.3);
       expect(result.processing.duration_seconds).toBeLessThanOrEqual(2.5);
+      expect(result.processing.duration_unit).toBe('s');
     });
   });
 

@@ -344,6 +344,7 @@ export class AppController {
       processing: {
         ...(data?.processing || {}),
         duration_seconds: Math.max(0, durationSeconds),
+        duration_unit: 's',
       },
     };
   }
