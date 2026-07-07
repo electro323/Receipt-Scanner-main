@@ -129,6 +129,22 @@ describe('AppController', () => {
     });
   });
 
+  describe('processing metadata', () => {
+    it('adds processing duration seconds to extracted JSON', () => {
+      const startedAt = Date.now() - 2345;
+      const result = (appController as any).attachProcessingDuration(
+        {
+          document: { type: 'receipt', transaction_type: 'purchase' },
+          raw_text: 'sample receipt',
+        },
+        startedAt,
+      );
+
+      expect(result.processing.duration_seconds).toBeGreaterThanOrEqual(2.3);
+      expect(result.processing.duration_seconds).toBeLessThanOrEqual(2.5);
+    });
+  });
+
   describe('BMTC route parsing', () => {
     it('extracts generic travel stops around standalone TO without stop-name rules', () => {
       const rawText = [

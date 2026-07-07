@@ -184,6 +184,8 @@ export class AppController {
     file: any,
     transactionId: string,
   ) {
+    const processingStartedAt = Date.now();
+
     try {
       let rawText = '';
       let averageConfidence = 0;
@@ -287,6 +289,7 @@ export class AppController {
         finalData = enrichReceiptData({}, rawText);
       }
       finalData = this.applyExtractedTravelStops(finalData, extractedTravelStops);
+      finalData = this.attachProcessingDuration(finalData, processingStartedAt);
 
       await this.receiptService.saveAIResult(transactionId, finalData);
       console.log('Final receipt JSON saved for transaction:', transactionId);
@@ -303,12 +306,14 @@ export class AppController {
 
   @Post('process-ai')
   async processAI(@Body() body: any) {
+    const processingStartedAt = Date.now();
     const aiResponse = await processReceiptWithAI(body.rawText || '');
     const structuredData = JSON.parse(aiResponse);
-    const finalData = this.applyExtractedTravelStops(
+    let finalData = this.applyExtractedTravelStops(
       enrichReceiptData(structuredData, body.rawText || ''),
       extractTravelStopsFromOCR(body.rawText || ''),
     );
+    finalData = this.attachProcessingDuration(finalData, processingStartedAt);
 
     if (body.transactionId) {
       await this.receiptService.saveAIResult(body.transactionId, finalData);
@@ -329,6 +334,18 @@ export class AppController {
     }
 
     return data;
+  }
+
+  private attachProcessingDuration(data: any, startedAtMs: number) {
+    const durationSeconds = Number(((Date.now() - startedAtMs) / 1000).toFixed(2));
+
+    return {
+      ...(data || {}),
+      processing: {
+        ...(data?.processing || {}),
+        duration_seconds: Math.max(0, durationSeconds),
+      },
+    };
   }
 
   @Put(['receipt/:transactionId', 'receipts/:transactionId'])
