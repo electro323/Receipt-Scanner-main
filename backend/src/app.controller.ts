@@ -645,9 +645,20 @@ export class AppController {
       wholeImagePaths.length,
       mode === 'fast' ? 3 : mode === 'strong' ? 5 : 3,
     );
+    let originalCandidate: any = null;
     for (let index = 0; index < maxFastVariants; index++) {
+      if (
+        index > 0 &&
+        originalCandidate &&
+        this.hasBmtcOcrSignals(originalCandidate.text) &&
+        !this.isBmtcSafePreprocessPath(wholeImagePaths[index])
+      ) {
+        break;
+      }
+
       const candidate = await this.recognizeEnglishOnly(wholeImagePaths[index], langPath);
       candidates.push(candidate);
+      if (index === 0) originalCandidate = candidate;
 
       if (this.isExcellentOcr(candidate) && this.isCompleteEnoughForEarlyReturn(candidate.text)) {
         return candidate;
@@ -684,6 +695,10 @@ export class AppController {
     best = [best, multilingual].filter(Boolean).sort((a, b) => b.score - a.score)[0];
 
     return best;
+  }
+
+  private isBmtcSafePreprocessPath(imagePath: string): boolean {
+    return !/-bw\.png$|-shadow-lift\.png$|-denoise\.png$|-bmtc-clean\.png$|-bmtc-ink\.png$|-segment-\d+\.png$/i.test(imagePath);
   }
 
   private async recognizeReceiptSegments(segmentPaths: string[], langPath: string) {

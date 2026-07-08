@@ -146,6 +146,17 @@ describe('AppController', () => {
     });
   });
 
+  describe('BMTC OCR safety', () => {
+    it('allows original and mild variants but rejects aggressive BMTC preprocessing paths', () => {
+      expect((appController as any).isBmtcSafePreprocessPath('ticket.jpg')).toBe(true);
+      expect((appController as any).isBmtcSafePreprocessPath('ticket.jpg-mild-gray.png')).toBe(true);
+      expect((appController as any).isBmtcSafePreprocessPath('ticket.jpg-mild-contrast.png')).toBe(true);
+      expect((appController as any).isBmtcSafePreprocessPath('ticket.jpg-bw.png')).toBe(false);
+      expect((appController as any).isBmtcSafePreprocessPath('ticket.jpg-bmtc-clean.png')).toBe(false);
+      expect((appController as any).isBmtcSafePreprocessPath('ticket.jpg-shadow-lift.png')).toBe(false);
+    });
+  });
+
   describe('BMTC route parsing', () => {
     it('extracts generic travel stops around standalone TO without stop-name rules', () => {
       const rawText = [

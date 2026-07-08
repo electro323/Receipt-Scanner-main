@@ -108,10 +108,6 @@ export async function preprocessImage(
   inputPath: string,
   mode: PreprocessMode = 'balanced',
 ): Promise<string[]> {
-  // Temporarily bypass color/contrast/threshold preprocessing to compare OCR on the original image.
-  void mode;
-  return [inputPath];
-
   const resizeWidth = mode === 'fast' ? 1650 : mode === 'strong' ? 2200 : 1900;
   const normalizedBase = sharp(inputPath)
     .rotate()
@@ -126,22 +122,26 @@ export async function preprocessImage(
     .resize({ width: resizeWidth, withoutEnlargement: false })
     .grayscale();
 
-  const fastVariants = [
+  const safeVariants = [
+    {
+      suffix: 'mild-gray',
+      pipeline: normalizedBase.clone().modulate({ brightness: 1.03 }).sharpen({ sigma: 0.65 }),
+    },
+    {
+      suffix: 'mild-contrast',
+      pipeline: normalizedBase.clone().linear(1.12, -6).sharpen({ sigma: 0.8 }),
+    },
+    {
+      suffix: 'mild-crop',
+      pipeline: croppedBase.clone().modulate({ brightness: 1.03 }).sharpen({ sigma: 0.65 }),
+    },
+  ];
+
+  const aggressiveVariants = [
     {
       suffix: 'bw',
       pipeline: croppedBase.clone().normalize().linear(1.3, -14).threshold(168).median(1),
     },
-    {
-      suffix: 'clean',
-      pipeline: croppedBase.clone().normalize().sharpen({ sigma: 1.05 }),
-    },
-    {
-      suffix: 'high-contrast',
-      pipeline: croppedBase.clone().normalize().linear(1.35, -18).sharpen({ sigma: 1.15 }),
-    },
-  ];
-
-  const strongerVariants = [
     {
       suffix: 'denoise',
       pipeline: croppedBase.clone().normalize().median(1).sharpen({ sigma: 1.25 }),
@@ -153,10 +153,10 @@ export async function preprocessImage(
   ];
 
   const variants = mode === 'fast'
-    ? fastVariants
+    ? safeVariants.slice(0, 2)
     : mode === 'strong'
-      ? [...fastVariants, ...strongerVariants]
-      : [...fastVariants, strongerVariants[0], strongerVariants[1]];
+      ? [...safeVariants, ...aggressiveVariants]
+      : safeVariants;
 
   const outputPaths = await Promise.all(variants.map(async (variant) => {
     const outputPath = inputPath + '-' + variant.suffix + '.png';
@@ -164,31 +164,21 @@ export async function preprocessImage(
     return outputPath;
   }));
 
-  const bmtcCleanPath = inputPath + '-bmtc-clean.png';
-  const bmtcInkPath = inputPath + '-bmtc-ink.png';
-  await createRoseSuppressedInkVariant(inputPath, bmtcCleanPath, resizeWidth, false).catch((error) => {
-    console.error('BMTC rose suppression preprocessing skipped:', error);
-  });
-  await createRoseSuppressedInkVariant(inputPath, bmtcInkPath, resizeWidth, true).catch((error) => {
-    console.error('BMTC rose suppression preprocessing skipped:', error);
-  });
-  if (existsSync(bmtcCleanPath)) {
-    outputPaths.unshift(bmtcCleanPath);
-  }
-  if (existsSync(bmtcInkPath)) {
-    outputPaths.splice(1, 0, bmtcInkPath);
-  }
-
-  if (mode === 'fast') return outputPaths;
-
-  const originalCleanPath = inputPath + '-original-clean.png';
-  await normalizedBase.clone().normalize().sharpen({ sigma: 1.1 }).png().toFile(originalCleanPath);
+  if (mode === 'fast') return [inputPath, ...outputPaths];
 
   const advancedPaths = mode === 'strong'
     ? await runOpenCvReceiptPreprocess(inputPath)
     : [];
 
-  return [...outputPaths, originalCleanPath, ...advancedPaths];
+  if (mode === 'strong') {
+    const bmtcCleanPath = inputPath + '-bmtc-clean.png';
+    await createRoseSuppressedInkVariant(inputPath, bmtcCleanPath, resizeWidth, false).catch((error) => {
+      console.error('BMTC rose suppression preprocessing skipped:', error);
+    });
+    if (existsSync(bmtcCleanPath)) advancedPaths.push(bmtcCleanPath);
+  }
+
+  return [inputPath, ...outputPaths, ...advancedPaths];
 }
 
 async function runOpenCvReceiptPreprocess(inputPath: string): Promise<string[]> {
