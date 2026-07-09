@@ -30,13 +30,63 @@ Full-stack web application for scanning receipt images and PDFs, extracting OCR 
 
 ## Prerequisites
 
-- Node.js 20+
-- MongoDB running locally
+- Docker Desktop
 - Ollama running locally with Llama 3.1 installed
+- Node.js 20+ only if running backend/frontend without Docker
+- MongoDB locally only if running backend without Docker
 
 ```bash
 ollama pull llama3.1
 ollama serve
+```
+
+## Run With Docker
+
+This is the recommended way to run the submitted project.
+
+1. Install and start Docker Desktop.
+2. Install Ollama and pull Llama 3.1:
+
+```bash
+ollama pull llama3.1
+ollama serve
+```
+
+3. Clone the repository:
+
+```bash
+git clone https://github.com/electro323/Receipt-Scanner-main.git
+cd Receipt-Scanner-main
+```
+
+4. Start the full application:
+
+```bash
+docker compose up --build
+```
+
+5. Open the frontend:
+
+```text
+http://localhost:8100
+```
+
+Backend API:
+
+```text
+http://localhost:3000
+```
+
+Docker starts three services:
+
+- `receipt-frontend`: Ionic frontend on port `8100`
+- `receipt-backend`: NestJS backend on port `3000`
+- `receipt-mongodb`: MongoDB database
+
+Important: Llama/Ollama runs on the host machine, not inside Docker. The backend container connects to it through:
+
+```text
+http://host.docker.internal:11434
 ```
 
 ## Backend Setup
