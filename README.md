@@ -143,6 +143,45 @@ receipt=<file>
 
 OCR language is detected automatically across English, Kannada, Malayalam, and Hindi.
 
+## Python API Test Scripts
+
+Automated API tests are available in `api-tests/`.
+
+Start the application first:
+
+```bash
+docker compose up --build
+```
+
+Install Python test dependencies:
+
+```bash
+cd api-tests
+pip install -r requirements.txt
+```
+
+Run the API tests from the repository root:
+
+```bash
+pytest -v api-tests
+```
+
+The tests verify:
+
+- receipt history API
+- monthly analytics API
+- unknown transaction lookup
+- accuracy metrics API
+- receipt upload API
+- transaction status lookup after upload
+
+Optional environment variables:
+
+```bash
+BASE_URL=http://localhost:3000
+RECEIPT_FILE=./load-tests/samples/Receipt.png
+```
+
 ### Retrieve Receipt JSON By Transaction ID
 
 ```http

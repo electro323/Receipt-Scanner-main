@@ -10,6 +10,9 @@ yarn-debug.log*
 yarn-error.log*
 .DS_Store
 Thumbs.db
+.pytest_cache/
+__pycache__/
+*.pyc
 
 backend/node_modules/
 backend/dist/
